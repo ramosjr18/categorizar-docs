@@ -49,6 +49,18 @@ python run.py
 
 > El servidor Flask estará corriendo en: [http://localhost:5000](http://localhost:5000)
 
+### 5. En nueva ventana entrar en el frontend
+
+```bash
+cd categorizar-docs/frontend
+```
+
+### 6. Ejecutar Servidor Python
+
+```bash
+python -m http.server 8000
+```
+
 ---
 
 ## 🗃️ Estructura del proyecto
