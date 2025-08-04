@@ -5,7 +5,7 @@ backend/app/__pycache__
 backend/app/utils/__pycache__
 backend/app/utils/instacegit version
 
-
+.gitignore
 
 #ignore uploads file
 backend/uploads/*
