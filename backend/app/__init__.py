@@ -4,6 +4,7 @@ import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_session import Session
 from .config import Config
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,9 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 app.config.from_object(Config)
 
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=["http://localhost:8000"])
+
+Session(app)
 
 # Definir carpeta uploads con ruta relativa segura
 basedir = os.path.abspath(os.path.dirname(__file__))

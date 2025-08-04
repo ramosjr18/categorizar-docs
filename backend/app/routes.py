@@ -288,3 +288,10 @@ def validar_graficable():
             app.logger.warning(f"No se pudo eliminar temporal: {e}")
 
     return jsonify({"graficable": es_valido})
+
+@app.route('/api/check-session')
+def check_session():
+    if 'user_id' in session:
+        return jsonify({"logged_in": True})
+    else:
+        return jsonify({"logged_in": False}), 401

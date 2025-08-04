@@ -3,7 +3,7 @@ const filtro = document.getElementById("filtroCategoria");
 
 let timeoutMensaje;
 
-function mostrarMensaje(texto, tipo = "error", duracion = 100000000) {
+function mostrarMensaje(texto, tipo = "error", duracion = 10000) {
   const mensaje = document.getElementById("mensaje");
 
   const cerrar = document.createElement("span");
@@ -64,7 +64,7 @@ async function esArchivoGraficable(doc) {
     const response = await fetch('http://localhost:5000/validar_graficable', {
       method: 'POST',
       body: formData,
-      credentials: 'include' // <== Aquí
+      credentials: 'include'
     });
     if (!response.ok) {
       console.error("Error en respuesta de validar_graficable:", await response.text());
@@ -78,52 +78,10 @@ async function esArchivoGraficable(doc) {
   }
 }
 
-// Subida de archivo
-document.getElementById("uploadForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const archivo = e.target.archivo.files[0];
-  if (!archivo) {
-    mostrarMensaje("⚠️ Debes seleccionar un archivo.", "error");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("archivo", archivo);
-
-  try {
-    const res = await fetch("http://localhost:5000/upload", {
-      method: "POST",
-      body: formData,
-      credentials: 'include' // <== Aquí
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      const mensajeError = data.error || "❌ No se pudo subir el archivo.";
-      mostrarMensaje(`❌ ${mensajeError}`, "error");
-      return;
-    }
-
-    mostrarMensaje("✅ Archivo subido correctamente", "exito");
-    cargarDocumentos(filtro.value);
-
-  } catch (err) {
-    mostrarMensaje("❌ No se pudo subir el archivo. Intenta nuevamente.", "error");
-    console.error(err);
-  }
-});
-
-// Filtro por categoría
-document.getElementById("aplicarFiltro").addEventListener("click", () => {
-  const categoria = filtro.value;
-  cargarDocumentos(categoria);
-});
-
 async function cargarDocumentos(categoria = "todas") {
   try {
     const res = await fetch("http://localhost:5000/documentos", {
-      credentials: 'include' // <== Aquí
+      credentials: 'include'
     });
     if (!res.ok) throw new Error("Error al obtener documentos");
 
@@ -131,11 +89,11 @@ async function cargarDocumentos(categoria = "todas") {
     contenedor.innerHTML = "";
 
     const agrupados = {};
-    docs.forEach(doc => {
-      if (categoria !== "todas" && doc.categoria !== categoria) return;
+    for (const doc of docs) {
+      if (categoria !== "todas" && doc.categoria !== categoria) continue;
       if (!agrupados[doc.categoria]) agrupados[doc.categoria] = [];
       agrupados[doc.categoria].push(doc);
-    });
+    }
 
     if (Object.keys(agrupados).length === 0) {
       contenedor.innerHTML = "<p>No hay documentos para esta categoría.</p>";
@@ -213,7 +171,7 @@ async function cargarDocumentos(categoria = "todas") {
 async function verContenido(id) {
   try {
     const res = await fetch(`http://localhost:5000/documentos/${id}`, {
-      credentials: 'include' // <== Aquí
+      credentials: 'include'
     });
     if (!res.ok) throw new Error("No se pudo obtener el contenido");
 
@@ -229,7 +187,7 @@ async function eliminar(id) {
   try {
     const res = await fetch(`http://localhost:5000/documentos/${id}`, {
       method: "DELETE",
-      credentials: 'include' // <== Aquí
+      credentials: 'include'
     });
     if (!res.ok) throw new Error("No se pudo eliminar");
 
@@ -257,5 +215,66 @@ document.getElementById("buscadorDocumentos").addEventListener("input", function
   });
 });
 
-// Cargar al inicio
-cargarDocumentos();
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const archivo = e.target.archivo.files[0];
+  if (!archivo) {
+    mostrarMensaje("⚠️ Debes seleccionar un archivo.", "error");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+
+  try {
+    const res = await fetch("http://localhost:5000/upload", {
+      method: "POST",
+      body: formData,
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const mensajeError = data.error || "❌ No se pudo subir el archivo.";
+      mostrarMensaje(`❌ ${mensajeError}`, "error");
+      return;
+    }
+
+    mostrarMensaje("✅ Archivo subido correctamente", "exito");
+    cargarDocumentos(filtro.value);
+
+  } catch (err) {
+    mostrarMensaje("❌ No se pudo subir el archivo. Intenta nuevamente.", "error");
+    console.error(err);
+  }
+});
+
+document.getElementById("aplicarFiltro").addEventListener("click", () => {
+  const categoria = filtro.value;
+  cargarDocumentos(categoria);
+});
+
+// --- NUEVO: Verificar sesión al inicio y redirigir si no hay ---
+async function verificarSesion() {
+  try {
+    const res = await fetch('http://localhost:5000/api/check-session', {
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      // No autorizado: redirigir al login
+      window.location.href = '/login.html';
+      return false;
+    }
+    return true;
+  } catch (error) {
+    window.location.href = '/login.html';
+    return false;
+  }
+}
+
+verificarSesion().then(estaLogueado => {
+  if (estaLogueado) {
+    cargarDocumentos();
+  }
+});
