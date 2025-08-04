@@ -90,8 +90,8 @@ CATEGORIZAR-DOCS/
 │   ├── main.js
 │   ├── main-graficar.js   
 │   ├── styles.css
-│   ├── .gitignore
-│   └── README.md
+├── .gitignore
+└── README.md
 
 ```
 
