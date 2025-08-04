@@ -5,79 +5,106 @@ import re
 import json
 import logging
 
-def analizar_excel_contenido(df):
+
+def analizar_excel_contenido(df: pd.DataFrame) -> dict:
+    """
+    Analiza el contenido textual de un DataFrame para identificar ciertos patrones.
+    """
     texto = df.to_string()
+    texto_lower = texto.lower()
 
     return {
         "contiene_ips": bool(re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", texto)),
-        "contiene_hosts": "host" in texto.lower() or "hostname" in texto.lower(),
-        "es_inventario": "inventario" in texto.lower() or "patrimonial" in texto.lower()
+        "contiene_hosts": "host" in texto_lower or "hostname" in texto_lower,
+        "es_inventario": "inventario" in texto_lower or "patrimonial" in texto_lower
     }
 
-def extraer_contenido(archivo, tipo):
+
+def extraer_contenido(archivo, tipo: str) -> tuple[str, dict]:
+    """
+    Extrae el contenido textual y patrones de un archivo según su tipo.
+
+    Args:
+        archivo: stream o ruta del archivo.
+        tipo (str): Tipo de archivo ('pdf', 'docx', 'xlsx', 'csv').
+
+    Returns:
+        Tuple: (contenido extraído, diccionario de patrones encontrados)
+
+    Raises:
+        RuntimeError: Si ocurre un error durante el procesamiento.
+        ValueError: Si el tipo no es soportado o no se puede extraer contenido.
+    """
     contenido = ""
     patrones = {}
 
-    if tipo == "pdf":
-        try:
-            with pdfplumber.open(archivo) as pdf:
-                total_paginas = len(pdf.pages)
-                if total_paginas == 0:
-                    raise ValueError("El PDF no contiene páginas.")
+    try:
+        if tipo == "pdf":
+            contenido = _procesar_pdf(archivo)
 
-                textos = []
-                for i, pagina in enumerate(pdf.pages):
-                    try:
-                        texto_pagina = pagina.extract_text()
-                        if texto_pagina:
-                            textos.append(texto_pagina)
-                        else:
-                            logging.warning(f"Página {i+1} del PDF no tiene texto extraíble.")
-                    except Exception as e:
-                        logging.warning(f"Error extrayendo texto de página {i+1}: {str(e)}")
+        elif tipo == "docx":
+            contenido = _procesar_docx(archivo)
 
-                contenido = "\n".join(textos)
+        elif tipo in {"xls", "xlsx"}:
+            contenido, patrones = _procesar_excel(archivo)
 
-                if not contenido.strip():
-                    raise ValueError("No se pudo extraer texto del PDF.")
-        except Exception as e:
-            raise RuntimeError(f"Error al procesar PDF: {str(e)}")
+        elif tipo == "csv":
+            contenido, patrones = _procesar_csv(archivo)
+
+        else:
+            raise ValueError(f"Tipo de archivo '{tipo}' no soportado")
+
+        return contenido, patrones
+
+    except Exception as e:
+        logging.exception(f"Error procesando archivo tipo {tipo}: {e}")
+        raise RuntimeError(f"Error al procesar {tipo.upper()}: {str(e)}")
 
 
-    elif tipo == "docx":
-        try:
-            documento = docx.Document(archivo)
-            contenido = "\n".join(p.text for p in documento.paragraphs)
-        except Exception as e:
-            raise RuntimeError(f"Error al procesar DOCX: {str(e)}")
+def _procesar_pdf(archivo) -> str:
+    with pdfplumber.open(archivo) as pdf:
+        if not pdf.pages:
+            raise ValueError("El PDF no contiene páginas.")
 
-    elif tipo in ["xls", "xlsx"]:
-        try:
-            xls = pd.ExcelFile(archivo)
-            hojas = {}
-            patrones = {}
+        textos = []
+        for i, pagina in enumerate(pdf.pages):
+            try:
+                texto = pagina.extract_text()
+                if texto:
+                    textos.append(texto)
+                else:
+                    logging.warning(f"Página {i + 1} del PDF no tiene texto extraíble.")
+            except Exception as e:
+                logging.warning(f"Error extrayendo texto de página {i + 1}: {e}")
 
-            for nombre_hoja in xls.sheet_names:
-                df = xls.parse(nombre_hoja)
-                hojas[nombre_hoja] = df.to_dict(orient='records')
+        contenido = "\n".join(textos).strip()
+        if not contenido:
+            raise ValueError("No se pudo extraer texto del PDF.")
+        return contenido
 
-                patrones_hoja = analizar_excel_contenido(df)
-                for clave, valor in patrones_hoja.items():
-                    patrones[clave] = patrones.get(clave, False) or valor
 
-            contenido = json.dumps(hojas, ensure_ascii=False, default=str)
-        except Exception as e:
-            raise RuntimeError(f"Error al procesar Excel: {str(e)}")
+def _procesar_docx(archivo) -> str:
+    doc = docx.Document(archivo)
+    return "\n".join(p.text for p in doc.paragraphs)
 
-    elif tipo == "csv":
-        try:
-            df = pd.read_csv(archivo)
-            contenido = df.to_json(orient='records', force_ascii=False, date_format='iso')
-            patrones = analizar_excel_contenido(df)
-        except Exception as e:
-            raise RuntimeError(f"Error al procesar CSV: {str(e)}")
 
-    else:
-        raise ValueError(f"Tipo de archivo '{tipo}' no soportado")
+def _procesar_excel(archivo) -> tuple[str, dict]:
+    xls = pd.ExcelFile(archivo)
+    hojas = {}
+    patrones = {}
 
+    for nombre_hoja in xls.sheet_names:
+        df = xls.parse(nombre_hoja)
+        hojas[nombre_hoja] = df.to_dict(orient='records')
+        for k, v in analizar_excel_contenido(df).items():
+            patrones[k] = patrones.get(k, False) or v
+
+    contenido = json.dumps(hojas, ensure_ascii=False, default=str)
+    return contenido, patrones
+
+
+def _procesar_csv(archivo) -> tuple[str, dict]:
+    df = pd.read_csv(archivo)
+    contenido = df.to_json(orient='records', force_ascii=False, date_format='iso')
+    patrones = analizar_excel_contenido(df)
     return contenido, patrones
