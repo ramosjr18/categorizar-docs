@@ -65,13 +65,14 @@ categorizar-docs/
 │   │   └── utils/              # Funciones auxiliares (OCR, hash, categorización)
 │   ├── run.py                  # Punto de entrada de la app
 │   └── requirements.txt        # Dependencias
+|    └── uploads/                    # Archivos cargados (ignorado por git)
 ├── frontend/
 │   ├── index.html              # Página principal (post-login)
 │   ├── login.html              # Login
 │   ├── register.html           # Registro
 │   ├── ver_docx.html           # Visualización DOCX
 │   └── graficos.html           # Visualización de gráficos
-└── uploads/                    # Archivos cargados (ignorado por git)
+
 ```
 
 ---
@@ -138,8 +139,7 @@ pip install -r requirements.txt
 
 ## ✅ TODO / Mejoras futuras
 
-- [ ] Refactorizar aún más las rutas en módulos independientes
 - [ ] Implementar pruebas unitarias y de integración
 - [ ] Mejorar la interfaz de usuario
 - [ ] Añadir documentación Swagger/OpenAPI
-- [ ] Implementar búsqueda y filtros en documentos
+
