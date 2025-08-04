@@ -54,24 +54,44 @@ python run.py
 ## 🗃️ Estructura del proyecto
 
 ```
-categorizar-docs/
+CATEGORIZAR-DOCS/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py         # Inicialización Flask + SQLAlchemy
-│   │   ├── config.py           # Configuración general
-│   │   ├── models.py           # Modelos de base de datos
-│   │   ├── routes.py           # Rutas protegidas (documentos, gráficos)
-│   │   ├── auth_routes.py      # Rutas de login/registro
-│   │   └── utils/              # Funciones auxiliares (OCR, hash, categorización)
-│   ├── run.py                  # Punto de entrada de la app
-│   └── requirements.txt        # Dependencias
-|    └── uploads/                    # Archivos cargados (ignorado por git)
+│   │   ├── templates/
+│   │   ├── utils/
+│   │   │   ├── instance/
+│   │   │   ├── categorize.py
+│   │   │   ├── es_graficable.py
+│   │   │   ├── file_comparator.py
+│   │   │   ├── limpieza_programada.py
+│   │   │   ├── ocr.py
+│   │   │   └── __init__.py
+│   │   ├── auth_routes.py
+│   │   ├── config.py
+│   │   ├── models.py
+│   │   └── routes.py
+│   ├── instance/
+│   ├── uploads/
+│   ├── requirements.txt
+│   └── run.py
 ├── frontend/
-│   ├── index.html              # Página principal (post-login)
-│   ├── login.html              # Login
-│   ├── register.html           # Registro
-│   ├── ver_docx.html           # Visualización DOCX
-│   └── graficos.html           # Visualización de gráficos
+│   ├── favicon_io/
+│   ├── detalle.html
+│   ├── detallebackup.html
+│   ├── graficar-multiple.html
+│   ├── graficar.html
+│   ├── index_backup.html
+│   ├── index.html
+│   ├── inventario.html
+│   ├── ip-graficos.html
+│   ├── login.html
+│   ├── preview.html
+│   ├── register.html
+│   ├── main.js
+│   ├── main-graficar.js   
+│   ├── styles.css
+│   ├── .gitignore
+│   └── README.md
 
 ```
 
