@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+</head>
+<body>
+  <h1>Iniciar Sesión</h1>
+  <form id="loginForm">
+    <input type="email" id="email" placeholder="Email" required />
+    <br /><br />
+    <input type="password" id="password" placeholder="Contraseña" required />
+    <br /><br />
+    <button type="submit">Entrar</button>
+  </form>
+
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert("Login exitoso");
+        window.location.href = "/index.html"; // Redirige a página principal protegida
+      } else {
+        alert(data.error || "Credenciales inválidas");
+      }
+    });
+  </script>
+</body>
+</html>

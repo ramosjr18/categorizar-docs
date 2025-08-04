@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📁 Clasificador de Documentos</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="./favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="./favicon_io/site.webmanifest">
+</head>
+
+<body>
+  <h1>📁 Clasificador de Documentos</h1>
+
+  <section>
+    <h2>Subir documento</h2>
+    <p>Archivos admitidos: .pdf, .xlsx, .docx, .csv</p>
+    <form id="uploadForm">
+      <input type="file" name="archivo" required />
+      <button type="submit">Subir</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Lista de documentos</h2>
+    categoría:</label>
+    <select id="filtroCategoria">
+      <option value="todas">Todas</option>
+      <option value="Finanzas">Finanzas</option>
+      <option value="Legal">Legal</option>
+      <option value="Reporte">Reporte</option>
+      <option value="Sistemas y Servidores">Sistemas y Servidores</option>
+      <option value="Inventario">Inventario</option>
+      <option value="General">General</option>
+      <option value="Politicas y Controles">Politicas y Controles</option>
+    </select>
+    <button id="aplicarFiltro">Filtrar</button>
+
+    <input type="text" id="buscadorDocumentos" placeholder="Buscar por nombre..." style="margin-left: 10px;">
+
+  </section>
+
+  <!-- Contenedor para mensajes -->
+  <div id="mensaje" class="mensaje"></div>
+
+  <!-- Contenedor dinámico para categorías -->
+  <div id="contenedorCategorias" class="grid-container"></div>
+
+  <script src="main.js"></script>
+</body>
+
+</html>

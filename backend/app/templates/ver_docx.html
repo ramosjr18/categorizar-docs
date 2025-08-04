@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Visor de Documento DOCX</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background-color: #f2f2f2;
+    }
+    h1 {
+      color: #333;
+    }
+    #preview {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      background-color: #fff;
+      margin-top: 1rem;
+      min-height: 200px;
+      white-space: pre-wrap;
+    }
+    #preview img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📄 Vista previa del documento DOCX</h1>
+  <div id="preview">Cargando documento...</div>
+
+  <!-- Cargar Mammoth.js desde CDN -->
+  <script src="https://unpkg.com/mammoth/mammoth.browser.min.js"></script>
+
+  <script>
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const nombreArchivo = params.get("nombre");
+      const preview = document.getElementById("preview");
+
+      if (!nombreArchivo) {
+        preview.innerText = "❌ No se especificó ningún archivo.";
+        return;
+      }
+
+      fetch(`/documentos/${nombreArchivo}`)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("No se pudo cargar el archivo");
+          }
+          return response.arrayBuffer();
+        })
+        .then(arrayBuffer => {
+          return mammoth.convertToHtml(
+            { arrayBuffer },
+            {
+              convertImage: mammoth.images.inline(function(element) {
+                return element.read("base64").then(function(imageBuffer) {
+                  return {
+                    src: "data:" + element.contentType + ";base64," + imageBuffer
+                  };
+                });
+              })
+            }
+          );
+        })
+        .then(result => {
+          preview.innerHTML = result.value;
+        })
+        .catch(err => {
+          console.error(err);
+          preview.innerText = "❌ Error al cargar el documento.";
+        });
+    };
+  </script>
+
+</body>
+</html>

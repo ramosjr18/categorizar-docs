@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Karen</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>📁 Clasificador de Documentos</h1>
+  
+
+  <section>
+    <h2>Subir documento</h2>
+    <p>archivos admitidos .pdf, .xlsx, .docx, .csv</p>
+    <form id="uploadForm">
+      <input type="file" name="archivo" required />
+      <button type="submit">Subir</button>
+    </form>
+    <!-- <pre id="resultado"></pre> -->
+  </section>
+
+  
+<section>
+  <h2>Lista de documentos</h2>
+  <label for="filtroCategoria">Filtrar por categoría:</label>
+  <select id="filtroCategoria">
+    <option value="todas">Todas</option>
+    <option value="Finanzas">Finanzas</option>
+    <option value="Legal">Legal</option>
+    <option value="Reporte">Reporte</option>
+    <option value="Sistemas y Servidores">Sistemas y Servidores</option>
+    <option value="General">General</option>
+  </select>
+  <button id="aplicarFiltro">Filtrar</button>
+
+  <div id="contenedorCategorias" class="grid-container"></div>
+</section>
+
+<div id="mensaje" class="mensaje"></div>
+
+  <script src="main.js"></script>
+</body>
+</html>

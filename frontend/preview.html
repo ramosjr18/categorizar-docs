@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vista previa del documento</title>
+  <style>
+    body { font-family: sans-serif; padding: 1em; }
+    iframe { width: 100%; height: 90vh; border: none; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Vista previa del documento</h1>
+  
+<iframe id="visor" src=""></iframe>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const nombre = params.get("nombre");
+
+  if (!nombre) {
+    document.body.innerHTML = "<p>❌ Nombre de archivo no proporcionado.</p>";
+  } else {
+    const visor = document.getElementById("visor");
+    visor.src = `http://localhost:5000/documentos/${nombre}`;
+    console.log(`Cargando visor desde: http://localhost:5000/documentos/${encodeURIComponent(nombre)}`);
+  }
+</script>
+
+</body>
+</html>

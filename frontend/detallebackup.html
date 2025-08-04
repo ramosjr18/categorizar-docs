@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Detalle del Documento</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <h1>📄 Detalle del Documento</h1>
+  <div id="contenidoDocumento">Cargando...</div>
+
+  <script>
+    async function cargarContenido() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+
+      if (!id) {
+        document.getElementById("contenidoDocumento").innerText = "❌ ID no proporcionado.";
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://localhost:5000/documentos/${id}`, {
+          credentials: "include"
+        });
+        if (!res.ok) throw new Error("No se pudo obtener el contenido");
+
+        const doc = await res.json();
+        document.getElementById("contenidoDocumento").innerText = doc.contenido || "[Sin contenido]";
+      } catch (err) {
+        document.getElementById("contenidoDocumento").innerText = "❌ Error al cargar el documento.";
+        console.error(err);
+      }
+    }
+
+    cargarContenido();
+  </script>
+</body>
+
+</html>

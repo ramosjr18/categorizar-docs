@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Detalle del Documento</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    h2 {
+      margin-top: 30px;
+    }
+
+    pre {
+      background-color: #f4f4f4;
+      padding: 15px;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+    }
+
+    #selector-hoja {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Detalle del Documento</h1>
+  <div id="selector-hoja" style="display:none;">
+    <label for="hoja">Selecciona una hoja:</label>
+    <select id="hoja"></select>
+  </div>
+  <div id="tabla-inventario">Cargando...</div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    let contenidoGlobal = null;
+
+    async function cargarDetalle() {
+      try {
+        const res = await fetch(`http://localhost:5000/documentos/${id}`, {
+          credentials: "include"
+        });
+        if (!res.ok) throw new Error("No se pudo obtener el documento");
+
+        const doc = await res.json();
+        let contenido = doc.contenido;
+
+        try {
+          // Reemplazar NaN por null para evitar errores de parseo
+          contenido = typeof contenido === "string"
+            ? JSON.parse(contenido.replace(/NaN/g, "null"))
+            : contenido;
+        } catch (e) {
+          document.getElementById("tabla-inventario").innerHTML = `<pre>${contenido}</pre>`;
+          return;
+        }
+
+        contenidoGlobal = contenido;
+
+        if (typeof contenido === "object" && !Array.isArray(contenido)) {
+          const hojas = Object.keys(contenido);
+          const todasSonListas = hojas.every(k => Array.isArray(contenido[k]));
+
+          if (hojas.length > 1 && todasSonListas) {
+            const selector = document.getElementById("selector-hoja");
+            const select = document.getElementById("hoja");
+            selector.style.display = "block";
+            select.innerHTML = hojas.map(h => `<option value="${h}">${h}</option>`).join("");
+            select.addEventListener("change", () => renderHoja(select.value));
+            renderHoja(hojas[0]);
+            return;
+          }
+        }
+
+        renderContenido(contenido);
+
+      } catch (err) {
+        document.getElementById("tabla-inventario").innerHTML = "❌ Error al cargar el detalle.";
+        console.error(err);
+      }
+    }
+
+    function renderHoja(nombreHoja) {
+      const hoja = contenidoGlobal[nombreHoja];
+      renderContenido(hoja, nombreHoja);
+    }
+
+    function renderContenido(contenido, titulo = "") {
+      let html = titulo ? `<h2>${titulo}</h2>` : "";
+
+      if (Array.isArray(contenido)) {
+        const headers = Object.keys(contenido[0] || {});
+        html += "<table><thead><tr>";
+        headers.forEach(h => html += `<th>${h}</th>`);
+        html += "</tr></thead><tbody>";
+
+        contenido.forEach(row => {
+          html += "<tr>";
+          headers.forEach(h => {
+            html += `<td>${row[h] ?? ""}</td>`;
+          });
+          html += "</tr>";
+        });
+
+        html += "</tbody></table>";
+      } else if (typeof contenido === "object") {
+        Object.entries(contenido).forEach(([grupo, registros]) => {
+          html += `<h2>${grupo}</h2>`;
+          if (Array.isArray(registros)) {
+            const headers = Object.keys(registros[0] || {});
+            html += "<table><thead><tr>";
+            headers.forEach(h => html += `<th>${h}</th>`);
+            html += "</tr></thead><tbody>";
+
+            registros.forEach(row => {
+              html += "<tr>";
+              headers.forEach(h => {
+                html += `<td>${row[h] ?? ""}</td>`;
+              });
+              html += "</tr>";
+            });
+
+            html += "</tbody></table>";
+          } else {
+            html += `<pre>${JSON.stringify(registros, null, 2)}</pre>`;
+          }
+        });
+      } else {
+        html = `<pre>${contenido}</pre>`;
+      }
+
+      document.getElementById("tabla-inventario").innerHTML = html;
+    }
+
+    cargarDetalle();
+  </script>
+</body>
+
+</html>

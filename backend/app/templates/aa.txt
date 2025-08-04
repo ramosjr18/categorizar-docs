@@ -1,0 +1,37 @@
+Confirmar estructura actual de tu proyecto:
+
+¿Dónde guardas las plantillas HTML? ¿En /templates?
+si pero en el backend /backend/app/templates
+
+¿Tienes CSS o frameworks que uses ya (Bootstrap, Tailwind, otro)?
+ solo css
+Confirmar configuración actual:
+
+¿Qué variable usas para la carpeta de uploads? (Por ejemplo, app.config['UPLOAD_FOLDER'])
+ creo que esa app.config['UPLOAD_FOLDER']
+¿Tienes rutas específicas para previsualizar PDF y DOCX que quieras mantener o unificarlas?
+hay rutas especificas creo, ya te habia pasado mi codgo 
+
+Detalles sobre cómo quieres la navegación:
+
+¿Quieres una página aparte para previsualizar XLSX y CSV?
+si es posible la misma pagina 
+
+
+
+¿Quieres que en la lista de documentos (o en algún listado) tengas un enlace “Ver” que abra esa vista?
+para esto ya tengo una lista, te la paso cuando vayamos a esa parte del codigo 
+
+Versiones de librerías importantes:
+
+¿Qué versión de Flask usas?
+Flask==3.1.1
+¿Pandas, pdfplumber, docx, etc.?
+(Para asegurar que los métodos que te doy funcionen sin problemas).
+
+Opcional:
+
+¿Quieres que integre algún manejo especial de errores o logs?
+los basicos y necesarios
+¿Quieres que la tabla permita paginación o solo mostrar hasta cierto límite?
+si paginacion

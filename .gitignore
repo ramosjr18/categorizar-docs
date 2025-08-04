@@ -1,0 +1,11 @@
+# ignore
+backend/instance/*
+backend/venv
+backend/app/__pycache__
+backend/app/utils/__pycache__
+backend/app/utils/instacegit version
+
+
+
+#ignore uploads file
+backend/uploads/*

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Inventario</title>
+    <script src="  https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+
+        h2 {
+            text-align: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            justify-items: center;
+            align-items: start;
+        }
+
+        .grid>div {
+            width: 100%;
+            height: auto;
+        }
+
+        canvas {
+            width: 100% !important;
+            max-width: 800px;
+            height: 400px !important;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Visualización de Inventario</h2>
+    <div class="grid">
+        <div>
+            <h3>Cantidad por Descripción</h3>
+            <canvas id="graficoDescripcion"></canvas>
+        </div>
+        <div>
+            <h3>Distribución por Marca</h3>
+            <canvas id="graficoMarca"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        const API_URL = `http://localhost:5000/documentos/${id}`;
+
+        fetch(API_URL, {
+            credentials: "include"
+        })
+            .then(response => response.json())
+            .then(data => {
+                const contenido = JSON.parse(data.contenido);
+
+                // === Gráfico de barras por descripción ===
+                const descripciones = contenido
+                    .map(item => item["Unnamed: 3"])
+                    .filter(desc => desc && desc.trim() !== "" && desc.trim().toLowerCase() !== "descripcion");
+
+                const conteoDesc = {};
+                descripciones.forEach(desc => {
+                    conteoDesc[desc] = (conteoDesc[desc] || 0) + 1;
+                });
+
+                const ordenadoDesc = Object.entries(conteoDesc).sort((a, b) => b[1] - a[1]);
+                const etiquetasDesc = ordenadoDesc.map(([desc]) => desc);
+                const cantidadesDesc = ordenadoDesc.map(([_, count]) => count);
+
+                new Chart(document.getElementById('graficoDescripcion').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: etiquetasDesc,
+                        datasets: [{
+                            label: 'Cantidad',
+                            data: cantidadesDesc,
+                            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+
+                // === Gráfico de pastel por marca ===
+                const marcas = contenido
+                    .map(item => item["Unnamed: 4"])
+                    .filter(marca => marca && marca.trim() !== "" && marca.trim().toLowerCase() !== "marca");
+
+                const conteoMarca = {};
+                marcas.forEach(marca => {
+                    conteoMarca[marca] = (conteoMarca[marca] || 0) + 1;
+                });
+
+                const etiquetasMarca = Object.keys(conteoMarca);
+                const cantidadesMarca = Object.values(conteoMarca);
+
+                new Chart(document.getElementById('graficoMarca').getContext('2d'), {
+                    type: 'pie',
+                    data: {
+                        labels: etiquetasMarca,
+                        datasets: [{
+                            data: cantidadesMarca,
+                            backgroundColor: [
+                                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                                '#9966FF', '#FF9F40', '#C9CBCF', '#8BC34A'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error al cargar datos del backend:', error);
+                alert('No se pudieron cargar los datos del inventario.');
+            });
+    </script>
+
+</body>
+
+</html>

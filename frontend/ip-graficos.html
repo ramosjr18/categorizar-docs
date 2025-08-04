@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Resumen de IPs - Polar Area</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .charts-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .charts-container>div {
+            width: 48%;
+            height: auto;
+        }
+
+        canvas {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            max-width: 80%;
+            max-height: 400px;
+        }
+
+        .selector {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Resumen de IPs</h2>
+
+    <div class="charts-container">
+        <div>
+            <h3>Totales (todas las hojas)</h3>
+            <canvas id="totalChart"></canvas>
+            <p id="enlace-ver"></p>
+        </div>
+        <div>
+            <h3>Hoja seleccionada</h3>
+            <div class="selector">
+                <label for="hoja">Selecciona una hoja:</label>
+                <select id="hoja" onchange="actualizarHoja()"></select>
+            </div>
+            <canvas id="hojaChart"></canvas>
+            <p><a href="">Ver</a></p>
+        </div>
+    </div>
+
+    <script>
+        async function cargarDatos() {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get("id");
+            if (!id) {
+                alert("Falta el parámetro ?id=");
+                return;
+            }
+
+            const API_URL = `http://localhost:5000/documentos/${id}`;
+            try {
+                const response = await fetch(API_URL, {
+                    credentials: "include"
+                });
+                const data = await response.json();
+
+                const contenidoSanitizado = data.contenido.replace(/NaN/g, "null");
+                const contenido = JSON.parse(contenidoSanitizado);
+
+                const etiquetas = ["Con Host Name", "Vacías", "Libre"];
+                const colores = ["#4CAF50", "#FFC107", "#F44336"];
+
+                const hojas = Object.keys(contenido);
+                const datosPorHoja = {};
+                let totalHost = 0, totalVacio = 0, totalLibre = 0;
+
+                hojas.forEach(hoja => {
+                    const registros = contenido[hoja];
+                    let conHost = 0, vacio = 0, libre = 0;
+
+                    registros.forEach(item => {
+                        const raw = item["Host Name "] || item["Host Name"] || "";
+                        const valor = String(raw).trim().toLowerCase();
+
+                        if (!valor || valor === "null" || valor === "nan") {
+                            vacio++;
+                        } else if (valor.includes("libre")) {
+                            libre++;
+                        } else {
+                            conHost++;
+                        }
+                    });
+
+                    datosPorHoja[hoja] = [conHost, vacio, libre];
+                    totalHost += conHost;
+                    totalVacio += vacio;
+                    totalLibre += libre;
+                });
+
+                new Chart(document.getElementById("totalChart"), {
+                    type: "polarArea",
+                    data: {
+                        labels: etiquetas,
+                        datasets: [{
+                            data: [totalHost, totalVacio, totalLibre],
+                            backgroundColor: colores
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: "right" },
+                            title: { display: false }
+                        }
+                    }
+                });
+
+                const hojaChart = new Chart(document.getElementById("hojaChart"), {
+                    type: "polarArea",
+                    data: {
+                        labels: etiquetas,
+                        datasets: [{
+                            data: datosPorHoja[hojas[0]],
+                            backgroundColor: colores
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: "right" },
+                            title: { display: false }
+                        }
+                    }
+                });
+
+                const select = document.getElementById("hoja");
+                hojas.forEach(h => {
+                    const option = document.createElement("option");
+                    option.value = h;
+                    option.textContent = h;
+                    select.appendChild(option);
+                });
+
+                window.actualizarHoja = function () {
+                    const hojaSeleccionada = select.value;
+                    hojaChart.data.datasets[0].data = datosPorHoja[hojaSeleccionada];
+                    hojaChart.update();
+                };
+
+                // === GRÁFICA 1: Barras por 'Type' ===
+                const conteoTipos = {};
+                const conteoVLAN = { "Con VLAN": 0, "Sin VLAN": 0 };
+
+                hojas.forEach(hoja => {
+                    const registros = contenido[hoja];
+                    registros.forEach(item => {
+                        const tipo = item["Type"] || "Desconocido";
+                        conteoTipos[tipo] = (conteoTipos[tipo] || 0) + 1;
+
+                        const vlan = item["VLAN"];
+                        if (vlan !== null && vlan !== undefined && vlan !== "") {
+                            conteoVLAN["Con VLAN"]++;
+                        } else {
+                            conteoVLAN["Sin VLAN"]++;
+                        }
+                    });
+                });
+
+                const etiquetasTipos = Object.keys(conteoTipos);
+                const valoresTipos = Object.values(conteoTipos);
+
+                const etiquetasVLAN = Object.keys(conteoVLAN);
+                const valoresVLAN = Object.values(conteoVLAN);
+
+                const nuevaSeccion = document.createElement("div");
+                nuevaSeccion.className = "charts-container";
+                nuevaSeccion.innerHTML = `
+                    <div>
+                        <h3>Tipos de IP (columna "Type")</h3>
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                    <div>
+                        <h3>Distribución de VLAN</h3>
+                        <canvas id="vlanChart"></canvas>
+                    </div>
+                `;
+                document.body.appendChild(nuevaSeccion);
+
+                new Chart(document.getElementById("typeChart"), {
+                    type: "bar",
+                    data: {
+                        labels: etiquetasTipos,
+                        datasets: [{
+                            label: "Cantidad por tipo",
+                            data: valoresTipos,
+                            backgroundColor: "rgba(54, 162, 235, 0.6)"
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: "Cantidad por tipo (columna 'Type')" }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+
+                new Chart(document.getElementById("vlanChart"), {
+                    type: "doughnut",
+                    data: {
+                        labels: etiquetasVLAN,
+                        datasets: [{
+                            data: valoresVLAN,
+                            backgroundColor: ["#66bb6a", "#ef5350"]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: "bottom" },
+                            title: { display: true, text: "Distribución de VLAN" }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error al cargar los datos:", error);
+                alert("No se pudieron cargar los datos del backend.");
+            }
+        }
+
+        cargarDatos();
+    </script>
+</body>
+
+</html>

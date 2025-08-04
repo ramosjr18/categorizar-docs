@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Seleccionar hojas para graficar</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <h1>Selecciona las hojas/tablas que deseas graficar</h1>
+
+  <form id="formulario-graficos">
+    <div id="checkboxes"></div>
+    <button type="submit">Generar Gráfico</button>
+  </form>
+
+  <hr>
+  <div id="contenedor-graficos"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const idArchivo = params.get('id');
+    const BACKEND_URL = "http://localhost:5000"; // Ajusta según tu entorno
+
+    // Cargar hojas o columnas disponibles
+    fetch(`${BACKEND_URL}/api/hojas/${idArchivo}`, {
+      credentials: "include"
+    })
+      .then(res => res.json())
+      .then(hojas => {
+        const contenedor = document.getElementById('checkboxes');
+        hojas.forEach(nombre => {
+          const label = document.createElement('label');
+          label.innerHTML = `<input type="checkbox" name="hojas" value="${nombre}"> ${nombre}`;
+          contenedor.appendChild(label);
+          contenedor.appendChild(document.createElement('br'));
+        });
+      })
+      .catch(err => {
+        console.error("Error al cargar hojas:", err);
+        alert("No se pudieron cargar las hojas o columnas.");
+      });
+
+    // Al enviar el formulario, obtener los datos y graficar
+    document.getElementById('formulario-graficos').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const seleccionadas = Array.from(document.querySelectorAll('input[name="hojas"]:checked'))
+        .map(cb => cb.value);
+
+      if (seleccionadas.length === 0) {
+        alert("Selecciona al menos una hoja.");
+        return;
+      }
+
+      const query = seleccionadas.map(h => `hojas=${encodeURIComponent(h)}`).join('&');
+      fetch(`${BACKEND_URL}/api/graficos?id=${idArchivo}&${query}`, {
+        credentials: "include"
+      })
+        .then(res => res.json())
+        .then(datos => {
+          const contenedor = document.getElementById('contenedor-graficos');
+          contenedor.innerHTML = ''; // Limpiar gráficos anteriores
+
+          Object.entries(datos).forEach(([nombre, registros], index) => {
+            const claves = Object.keys(registros[0] || {});
+            if (claves.length < 2) return;
+
+            const etiquetas = registros.map(r => r[claves[0]]);
+            const valores = registros.map(r => parseFloat(r[claves[1]]) || 0);
+
+            const canvas = document.createElement("canvas");
+            canvas.id = `grafico-${index}`;
+            contenedor.appendChild(canvas);
+
+            new Chart(canvas, {
+              type: 'bar',
+              data: {
+                labels: etiquetas,
+                datasets: [{
+                  label: nombre,
+                  data: valores,
+                  backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                  borderColor: 'rgba(75, 192, 192, 1)',
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                scales: {
+                  y: {
+                    beginAtZero: true
+                  }
+                }
+              }
+            });
+          });
+        })
+        .catch(err => {
+          console.error("Error al generar gráficos:", err);
+          alert("No se pudieron generar los gráficos.");
+        });
+    });
+  </script>
+</body>
+
+</html>
