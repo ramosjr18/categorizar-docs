@@ -42,11 +42,12 @@ def json_required(*fields):
 @json_required('email', 'password')
 def register():
     """
-    Registra un nuevo usuario con email y contraseña.
+    Registra el primer usuario como admin.
+    Después de eso, bloquea el registro público.
     """
     data = request.get_json()
 
-    # Validar formato de email
+    # Validar email
     try:
         valid = validate_email(data['email'])
         email = valid.email
@@ -56,7 +57,12 @@ def register():
     if Usuario.query.filter_by(email=email).first():
         return jsonify({'error': 'Usuario ya existe'}), 400
 
-    nuevo_usuario = Usuario(email=email)
+    # Verificar si ya existe al menos un usuario en el sistema
+    ya_hay_usuarios = Usuario.query.first() is not None
+    if ya_hay_usuarios:
+        return jsonify({'error': 'Registro deshabilitado. Solo el admin puede crear usuarios.'}), 403
+
+    nuevo_usuario = Usuario(email=email, is_admin=True)  # El primer usuario es admin
     nuevo_usuario.set_password(data['password'])
 
     try:
@@ -66,7 +72,53 @@ def register():
         db.session.rollback()
         return jsonify({'error': 'Error al registrar usuario'}), 500
 
-    return jsonify({'message': 'Usuario registrado correctamente'}), 201
+    return jsonify({'message': 'Administrador creado correctamente'}), 201
+
+
+@auth_bp.route('/api/yo', methods=['GET'])
+@login_required
+def yo():
+    user = Usuario.query.get(session.get('user_id'))
+    return jsonify({
+        'email': user.email,
+        'is_admin': getattr(user, 'is_admin', False)
+    }), 200
+
+
+@auth_bp.route('/api/admin/crear_usuario', methods=['POST'])
+@json_required('email', 'password')
+@login_required
+def crear_usuario():
+    """
+    Solo el admin puede crear nuevos usuarios.
+    """
+    admin_id = session.get('user_id')
+    admin = Usuario.query.get(admin_id)
+
+    if not admin or not admin.is_admin:
+        return jsonify({'error': 'Solo el administrador puede crear usuarios'}), 403
+
+    data = request.get_json()
+    try:
+        valid = validate_email(data['email'])
+        email = valid.email
+    except EmailNotValidError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if Usuario.query.filter_by(email=email).first():
+        return jsonify({'error': 'Este email ya está registrado'}), 400
+
+    nuevo_usuario = Usuario(email=email)
+    nuevo_usuario.set_password(data['password'])
+
+    try:
+        db.session.add(nuevo_usuario)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'Error al crear usuario'}), 500
+
+    return jsonify({'message': 'Usuario creado correctamente'}), 201
 
 
 @auth_bp.route('/api/login', methods=['POST'])

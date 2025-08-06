@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Panel de Administración</title>
+</head>
+<body>
+  <h1>Panel de Administración</h1>
+
+  <div id="status">Cargando...</div>
+
+  <form id="crearUsuarioForm" style="display:none;">
+    <h3>Crear nuevo usuario</h3>
+    <input type="email" id="nuevoEmail" placeholder="Email" required />
+    <br /><br />
+    <input type="password" id="nuevoPassword" placeholder="Contraseña" required />
+    <br /><br />
+    <button type="submit">Crear Usuario</button>
+  </form>
+
+  <br />
+  <button onclick="logout()">Cerrar sesión</button>
+
+ <script>
+  async function checkAdmin() {
+    const res = await fetch('/api/yo', {
+      method: 'GET',
+      credentials: 'include'
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.is_admin) {
+      document.getElementById('status').innerText = `Estás logueado como: ${data.email} (ADMIN)`;
+      document.getElementById('crearUsuarioForm').style.display = 'block';
+    } else if (res.ok) {
+      document.getElementById('status').innerText = `Estás logueado como: ${data.email}, pero no eres admin.`;
+    } else {
+      alert("No estás logueado. Redirigiendo al login.");
+      window.location.href = "/login.html";
+    }
+  }
+
+  document.getElementById("crearUsuarioForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const res = await fetch("/api/admin/crear_usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: 'include',
+      body: JSON.stringify({
+        email: document.getElementById("nuevoEmail").value,
+        password: document.getElementById("nuevoPassword").value,
+      }),
+    });
+
+    const data = await res.json();
+    alert(data.message || data.error);
+  });
+
+  function logout() {
+    fetch("/api/logout", {
+      method: "POST",
+      credentials: 'include'
+    }).then(() => {
+      window.location.href = "/login.html";
+    });
+  }
+
+  checkAdmin();
+</script>
+
+</body>
+</html>

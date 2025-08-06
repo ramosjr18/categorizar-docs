@@ -6,12 +6,12 @@ from flask import request, jsonify, send_from_directory, render_template, sessio
 from werkzeug.utils import secure_filename
 
 from . import app, db
-from .models import Documento
+from .models import Documento, Usuario
 from .utils.ocr import extraer_contenido
 from .utils.categorize import categorizar
 from .utils.file_comparator import hash_file
 from .utils.es_graficable import es_graficable
-from .auth_routes import login_required
+from .auth_routes import login_required, login_required
 
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
@@ -50,6 +50,14 @@ def login_page():
 @app.route('/register.html')
 def register_page():
     return redirect('/index.html') if 'user_id' in session else send_from_directory('frontend', 'register.html')
+
+@app.route('/admin')
+@login_required
+def admin_panel():
+    usuario = Usuario.query.get(session.get('user_id'))
+    if not usuario or not usuario.is_admin:
+        return "No autorizado", 403
+    return render_template('admin.html')
 
 
 # --- SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ---

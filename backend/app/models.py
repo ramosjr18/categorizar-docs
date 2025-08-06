@@ -24,22 +24,19 @@ class Documento(db.Model):
 
 
 class Usuario(db.Model):
-    """
-    Modelo de usuario para autenticación básica por email y contraseña.
-    """
     __tablename__ = 'usuarios'
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, comment="Correo electrónico único")
     password_hash = db.Column(db.String(128), nullable=False, comment="Contraseña en hash")
+    is_admin = db.Column(db.Boolean, default=False, nullable=False, comment="Indica si es administrador")
 
     def set_password(self, password: str):
-        """Cifra y guarda la contraseña del usuario."""
         self.password_hash = generate_password_hash(password)
     
     def check_password(self, password: str) -> bool:
-        """Verifica si la contraseña ingresada es válida."""
         return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
-        return f"<Usuario {self.email}>"
+        return f"<Usuario {self.email} - Admin: {self.is_admin}>"
+

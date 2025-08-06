@@ -1,37 +1,55 @@
-Confirmar estructura actual de tu proyecto:
+1. Crear el panel para que el admin cree otros usuarios
+¿Cuándo hacerlo?
 
-¿Dónde guardas las plantillas HTML? ¿En /templates?
-si pero en el backend /backend/app/templates
+Si quieres una interfaz amigable para que el admin pueda gestionar usuarios sin tocar APIs o base de datos directamente.
 
-¿Tienes CSS o frameworks que uses ya (Bootstrap, Tailwind, otro)?
- solo css
-Confirmar configuración actual:
+Facilita el mantenimiento y escalabilidad.
 
-¿Qué variable usas para la carpeta de uploads? (Por ejemplo, app.config['UPLOAD_FOLDER'])
- creo que esa app.config['UPLOAD_FOLDER']
-¿Tienes rutas específicas para previsualizar PDF y DOCX que quieras mantener o unificarlas?
-hay rutas especificas creo, ya te habia pasado mi codgo 
+¿Ventajas?
 
-Detalles sobre cómo quieres la navegación:
+Control visual y cómodo.
 
-¿Quieres una página aparte para previsualizar XLSX y CSV?
-si es posible la misma pagina 
+Puedes agregar funciones extra luego: editar, eliminar usuarios, asignar roles, etc.
 
+¿Desventajas?
 
+Requiere frontend extra (HTML, JS).
 
-¿Quieres que en la lista de documentos (o en algún listado) tengas un enlace “Ver” que abra esa vista?
-para esto ya tengo una lista, te la paso cuando vayamos a esa parte del codigo 
+Más código para mantener.
 
-Versiones de librerías importantes:
+2. Mejorar el login y control de sesiones
+¿Cuándo hacerlo?
 
-¿Qué versión de Flask usas?
-Flask==3.1.1
-¿Pandas, pdfplumber, docx, etc.?
-(Para asegurar que los métodos que te doy funcionen sin problemas).
+Siempre es recomendable.
 
-Opcional:
+Seguridad: manejo de expiración, protección contra secuestro de sesión.
 
-¿Quieres que integre algún manejo especial de errores o logs?
-los basicos y necesarios
-¿Quieres que la tabla permita paginación o solo mostrar hasta cierto límite?
-si paginacion
+Añadir roles en sesión para autorizar recursos.
+
+¿Ventajas?
+
+Más seguro y robusto.
+
+Mejor experiencia para usuarios.
+
+¿Desventajas?
+
+Implica diseñar un sistema más completo.
+
+3. Otra cosa que necesites
+Por ejemplo:
+
+Añadir recuperación de contraseña.
+
+Añadir verificación por email.
+
+Agregar logs o monitoreo.
+
+Mi recomendación:
+Si tu app es pequeña y quieres avanzar rápido:
+
+Primero mejora el login: añade control de roles y sesiones más seguras (tokens, expiración).
+
+Luego crea el panel admin para crear usuarios, así es más cómodo y seguro.
+
+Si quieres, te ayudo paso a paso en cualquiera de esos puntos. ¿Cuál te gustaría abordar primero?
