@@ -16,11 +16,11 @@
   <h1>📁 Clasificador de Documentos</h1>
   <button id="logoutBtn">Cerrar sesión</button>
 
-  <section>
+  <section id="zonaSubida">
     <h2>Subir documento</h2>
     <p>Archivos admitidos: .pdf, .xlsx, .docx, .csv</p>
     <form id="uploadForm">
-      <input type="file" name="archivo" required />
+      <input type="file" name="archivo" required multiple webkitdirectory directory />
       <button type="submit">Subir</button>
     </form>
   </section>
@@ -51,6 +51,16 @@
   <div id="contenedorCategorias" class="grid-container"></div>
 
   <script src="main.js"></script>
+
+  <!-- Modal de progreso -->
+<div id="modalProgreso" class="modal">
+  <div class="modal-content">
+    <span class="minimizar" onclick="toggleModal()">━</span>
+    <h3>📤 Subiendo archivos...</h3>
+    <div id="progresoArchivos"></div>
+  </div>
+</div>
+
 </body>
 
 <script>

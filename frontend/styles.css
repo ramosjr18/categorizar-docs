@@ -98,3 +98,47 @@ select {
   color: #155724;
 }
 
+.modal {
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  display: none;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 5% auto;
+  padding: 20px;
+  width: 400px;
+  border-radius: 5px;
+  position: relative;
+}
+
+.minimizar {
+  position: absolute;
+  right: 10px;
+  top: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.progreso-item {
+  margin-bottom: 10px;
+}
+
+.progreso-barra {
+  height: 10px;
+  background-color: #4caf50;
+  width: 0%;
+  transition: width 0.3s;
+}
+
+#zonaSubida.dragover {
+  border: 2px dashed #4caf50;
+  background-color: #f0fff0;
+}

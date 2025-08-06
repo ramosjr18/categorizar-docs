@@ -1,5 +1,5 @@
 # ignore
-backend/instance/*
+backend/instance/
 backend/venv
 backend/app/__pycache__
 backend/app/utils/__pycache__

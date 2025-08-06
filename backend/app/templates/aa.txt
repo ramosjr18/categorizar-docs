@@ -53,3 +53,84 @@ Primero mejora el login: añade control de roles y sesiones más seguras (tokens
 Luego crea el panel admin para crear usuarios, así es más cómodo y seguro.
 
 Si quieres, te ayudo paso a paso en cualquiera de esos puntos. ¿Cuál te gustaría abordar primero?
+
+
+
+
+
+✅ Objetivos:
+Permitir múltiples archivos o carpetas (drag & drop o input de archivos).
+
+Mostrar un modal o ventana informativa:
+
+✅ Archivos en proceso de carga.
+
+⚠️ Archivos rechazados con motivo.
+
+Subir los archivos válidos, omitir los no permitidos.
+
+Mantener tu lógica de seguridad con credentials: 'include'.
+
+🧩 ¿Qué vamos a modificar?
+Tu HTML (input type="file"): permitir múltiples archivos y carpetas (multiple, webkitdirectory).
+
+JavaScript: manejo de FormData para múltiples archivos.
+
+Añadir la ventana modal (estilos + estructura + JS).
+
+En el backend no hay que modificar nada porque ya manejas la validación por tipo, hash, errores de extracción, etc.
+
+🚀 Siguiente paso:
+Voy a escribir el nuevo JavaScript adaptado a tu estructura actual con:
+
+soporte de múltiples archivos y drag & drop,
+
+modal dinámico con estado de carga,
+
+mensajes de error claros para cada archivo.
+
+¿Deseas que el modal sea un div flotante estilo popup o una sección expandible dentro del documento? También, ¿quieres que el drag & drop sea sobre todo el documento o solo en la sección de subida?
+
+Una vez me confirmes eso, empiezo.
+
+
+
+✅ Lo que se va a incluir:
+Carga múltiple de archivos (individuales o por carpeta)
+
+Validación de tipos permitidos (.pdf, .xlsx, .docx, .csv)
+
+Drag & Drop solo en el área de subida
+
+Div flotante (modal) con progreso individual de cada archivo
+
+Listado de errores detallados en ese mismo modal
+
+
+
+
+-----------------------------------------------------------------------
+
+Hola, necesito que me ayudes a adaptar un código JavaScript que ya tengo para la subida de archivos. Quiero que integres las siguientes características:
+
+Un div flotante (modal) centrado en pantalla que muestre el progreso individual de carga de cada archivo, con barras y porcentaje.
+
+El modal debe oscurecer el fondo (overlay semi-transparente) pero debe ser colapsable para poder cerrarlo y seguir interactuando con la página mientras otros archivos siguen subiendo en segundo plano.
+
+El drag & drop de archivos solo debe funcionar en una sección específica de la página, no en todo el documento.
+
+La subida debe manejar múltiples archivos (incluyendo carpetas si es posible), mostrando el progreso de cada uno por separado.
+
+Mostrar un mensaje claro para archivos que no estén permitidos y omitir su subida.
+
+Que el modal tenga un botón para cerrarlo y desaparecer el overlay sin detener las subidas en curso.
+
+Que el código permita pasarme el listado de archivos para subir y se encargue de procesarlos (idealmente con fetch y FormData).
+
+El modal debe ser responsivo y no bloquear la interacción con otros elementos fuera del modal cuando esté abierto.
+
+Por favor, genera el JavaScript completo que cumpla con estas características para que luego yo pueda integrar mi código actual para subir archivos.
+
+Además, quiero que el código sea claro y fácil de adaptar para mi lógica actual.
+
+Gracias.
