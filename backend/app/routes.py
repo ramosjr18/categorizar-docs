@@ -168,6 +168,12 @@ def descargar_documento(id):
     return send_from_directory(app.config['UPLOAD_FOLDER'], doc.nombre, as_attachment=True)
 
 
+@app.route('/ver_docx')
+@login_required
+def ver_docx():
+    nombre = request.args.get("nombre")
+    return render_template("ver_docx.html", nombre=nombre)
+
 # --- GRAFICAR DATOS ---
 
 @app.route("/graficos")

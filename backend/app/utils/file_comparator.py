@@ -4,20 +4,22 @@ from collections import defaultdict
 from typing import Tuple, Dict, List
 
 
-def hash_file(file_path: str) -> str:
+def hash_file(file_obj) -> str:
     """
-    Calcula el hash SHA-256 de un archivo en disco.
+    Calcula el hash SHA-256 de un archivo dado como objeto file-like.
 
     Args:
-        file_path (str): Ruta del archivo.
+        file_obj: archivo abierto en modo binario, con método read().
 
     Returns:
         str: Hash hexadecimal del contenido del archivo.
     """
+
+    file_obj.seek(0)
     hasher = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            hasher.update(chunk)
+    for chunk in iter(lambda: file_obj.read(8192), b""):
+        hasher.update(chunk)
+    file_obj.seek(0) 
     return hasher.hexdigest()
 
 

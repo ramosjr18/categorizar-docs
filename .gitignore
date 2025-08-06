@@ -4,6 +4,7 @@ backend/venv
 backend/app/__pycache__
 backend/app/utils/__pycache__
 backend/app/utils/instacegit version
+backend/app/flask_session
 
 
 #ignore uploads file

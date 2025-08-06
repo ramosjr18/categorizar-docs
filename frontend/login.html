@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8" />
   <title>Login</title>
 </head>
+
 <body>
   <h1>Iniciar Sesión</h1>
   <form id="loginForm">
@@ -21,6 +23,7 @@
       const res = await fetch("http://localhost:5000/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",   // <---- Agrega esta línea
         body: JSON.stringify({
           email: document.getElementById("email").value,
           password: document.getElementById("password").value,
@@ -38,4 +41,5 @@
     });
   </script>
 </body>
+
 </html>

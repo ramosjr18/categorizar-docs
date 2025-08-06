@@ -14,6 +14,7 @@
 
 <body>
   <h1>📁 Clasificador de Documentos</h1>
+  <button id="logoutBtn">Cerrar sesión</button>
 
   <section>
     <h2>Subir documento</h2>
@@ -51,5 +52,27 @@
 
   <script src="main.js"></script>
 </body>
+
+<script>
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/logout', {
+        method: 'POST',
+        credentials: 'include'  // Importante para enviar cookies de sesión
+      });
+      
+      if (res.ok) {
+        alert('Sesión cerrada');
+        window.location.href = '/login.html';  // Redirige al login
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Error al cerrar sesión');
+      }
+    } catch (error) {
+      alert('Error de red');
+      console.error(error);
+    }
+  });
+</script>
 
 </html>
