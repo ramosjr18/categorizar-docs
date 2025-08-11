@@ -14,7 +14,7 @@ from .utils.categorize import categorizar
 from .utils.file_comparator import hash_file
 from .utils.es_graficable import es_graficable
 from .auth_routes import login_required
-from .utils_fs import ensure_dir  # <- ya creado por ti
+from .utils_fs import ensure_dir
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
 @app.before_request
