@@ -14,7 +14,9 @@ from .utils.categorize import categorizar
 from .utils.file_comparator import hash_file
 from .utils.es_graficable import es_graficable
 from .auth_routes import login_required
-from .utils_fs import ensure_dir
+from .utils.utils_fs import ensure_dir
+from .utils.utils_uploads import ensure_allowed_and_name, save_bytes
+
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
 @app.before_request
@@ -70,50 +72,57 @@ def admin_panel():
 @login_required
 def subir_documento():
     try:
-        archivo = request.files.get("archivo")
-        if not archivo:
-            return jsonify({"error": "No se recibió archivo"}), 400
+        file_storage = request.files.get("archivo")
+        # 1) Validaciones de existencia + extensión + nombre seguro + bytes en memoria
+        nombre_archivo_final, data = ensure_allowed_and_name(file_storage)
 
-        nombre = secure_filename(archivo.filename)
-        tipo = nombre.split(".")[-1].lower()
-        if tipo not in {"pdf", "docx", "xlsx", "csv"}:
-            return jsonify({"error": f"Tipo de archivo '{tipo}' no soportado"}), 400
+        # 2) Detección de duplicado por hash (usa stream de los bytes leídos)
+        from io import BytesIO
+        hash_nuevo = hash_file(BytesIO(data))  # tu util actual acepta .stream; aquí le pasamos BytesIO
 
-        hash_nuevo = hash_file(archivo.stream)
-        grupo = nombre
+        # Mantén el "grupo" usando el nombre original visible (opcional)
+        nombre_original = secure_filename(file_storage.filename)
+        tipo = Path(nombre_archivo_final).suffix.lower().lstrip(".")
+        grupo = nombre_original
+
         versiones = Documento.query.filter_by(grupo=grupo).order_by(Documento.version.desc()).all()
-
         for doc in versiones:
             if doc.hash_contenido == hash_nuevo:
                 return jsonify({"error": f"Ya existe una versión con el mismo contenido (v{doc.version})"}), 400
 
         version = versiones[0].version + 1 if versiones else 1
-        nombre_versionado = f"v{version}_{nombre}" if version > 1 else nombre
-        ruta = str(UPLOAD_DIR / nombre_versionado)
+        # Guardamos con nombre aleatorio + versionado opcional en DB, no en el FS
+        nombre_fs = nombre_archivo_final  # nombre físico seguro y opaco
+        if version > 1:
+            # Si quieres versionar en FS también:
+            stem = Path(nombre_archivo_final).stem
+            ext = Path(nombre_archivo_final).suffix
+            nombre_fs = f"v{version}_{stem}{ext}"
 
-        archivo.seek(0)
-        archivo.save(ruta)
+        # 3) Persistencia en disco (único punto de escritura)
+        ruta = save_bytes(UPLOAD_DIR, nombre_fs, data)
 
+        # 4) Extracción de contenido para categorizar
         try:
             with open(ruta, "rb") as f:
                 texto_extraido, patrones = extraer_contenido(f, tipo)
         except Exception as ex:
-            app.logger.error(f"Error extrayendo contenido de {nombre}: {ex}")
+            app.logger.error(f"Error extrayendo contenido de {nombre_original}: {ex}")
             return jsonify({"error": "Error extrayendo contenido"}), 400
 
-        categoria = categorizar(nombre, texto_extraido or "", patrones or {})
+        categoria = categorizar(nombre_original, texto_extraido or "", patrones or {})
 
+        # 5) Guardado en DB: separa nombre físico (FS) del nombre visible si lo deseas
         nuevo_doc = Documento(
-            nombre=nombre,
+            nombre=nombre_fs,                  # nombre de archivo guardado en FS
             tipo=tipo,
             contenido=texto_extraido,
             categoria=categoria,
             fecha_subida=date.today().isoformat(),
             version=version,
-            grupo=grupo,
+            grupo=grupo,                       # agrupación por nombre original
             hash_contenido=hash_nuevo,
-            # << clave para validar descargas >>
-            usuario_id=session.get('user_id')
+            usuario_id=session.get('user_id')  # dueño
         )
 
         db.session.add(nuevo_doc)
@@ -122,13 +131,16 @@ def subir_documento():
         return jsonify({
             "mensaje": f"Documento guardado como versión {version}",
             "categoria": categoria,
-            "version": version
+            "version": version,
+            "nombre_visible": nombre_original,
+            "id": nuevo_doc.id
         })
 
     except Exception as e:
         traceback.print_exc()
         app.logger.error(f"Error interno en subir_documento: {e}")
         return jsonify({"error": "Error interno"}), 500
+
 
 
 # --- DOCUMENTOS ---
@@ -306,14 +318,12 @@ def validar_graficable():
     if not archivo:
         return jsonify({"error": "No se recibió archivo"}), 400
 
-    nombre_seguro = secure_filename(archivo.filename)
-    if not (nombre_seguro.endswith(".xlsx") or nombre_seguro.endswith(".csv")):
-        return jsonify({"graficable": False, "mensaje": "Formato no soportado"}), 400
-
-    ruta_tmp = str(UPLOAD_DIR / f"tmp_{nombre_seguro}")
+    # Usa la utilidad común para validar y obtener bytes
+    nombre_tmp, data = ensure_allowed_and_name(archivo, allowed_exts={".xlsx", ".csv"})
+    ruta_tmp = str(UPLOAD_DIR / f"tmp_{nombre_tmp}")
 
     try:
-        archivo.save(ruta_tmp)
+        Path(ruta_tmp).write_bytes(data)
         es_valido = es_graficable(ruta_tmp)
     except Exception as e:
         app.logger.error(f"Error validando graficable: {e}")

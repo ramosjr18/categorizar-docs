@@ -21,6 +21,7 @@ Session(app)
 basedir = os.path.abspath(os.path.dirname(__file__))
 upload_folder = os.path.join(basedir, '..', 'uploads')
 app.config['UPLOAD_FOLDER'] = upload_folder
+app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
 os.makedirs(upload_folder, exist_ok=True)
 
 db = SQLAlchemy(app)
