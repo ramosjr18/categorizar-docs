@@ -36,11 +36,10 @@ def proteger_todas_rutas():
     if 'user_id' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
-# Carpeta de uploads (asegurada)
+
 UPLOAD_DIR = ensure_dir(Path(app.config.get('UPLOAD_FOLDER', 'uploads')))
 
 # --- PÁGINAS PRINCIPALES ---
-
 @app.route('/')
 def home():
     return redirect('/index.html') if 'user_id' in session else send_from_directory('frontend', 'login.html')
@@ -67,74 +66,78 @@ def admin_panel():
 
 
 # --- SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ---
-
 @app.route("/upload", methods=["POST"])
 @login_required
 def subir_documento():
     try:
-        file_storage = request.files.get("archivo")
-        # 1) Validaciones de existencia + extensión + nombre seguro + bytes en memoria
-        nombre_archivo_final, data = ensure_allowed_and_name(file_storage)
+        archivos = request.files.getlist("archivo")  # Soporte múltiples archivos
+        if not archivos:
+            return jsonify({"error": "No se recibieron archivos"}), 400
 
-        # 2) Detección de duplicado por hash (usa stream de los bytes leídos)
-        from io import BytesIO
-        hash_nuevo = hash_file(BytesIO(data))  # tu util actual acepta .stream; aquí le pasamos BytesIO
+        resultados = []
 
-        # Mantén el "grupo" usando el nombre original visible (opcional)
-        nombre_original = secure_filename(file_storage.filename)
-        tipo = Path(nombre_archivo_final).suffix.lower().lstrip(".")
-        grupo = nombre_original
+        for file_storage in archivos:
+            nombre_archivo_final, data = ensure_allowed_and_name(file_storage)
 
-        versiones = Documento.query.filter_by(grupo=grupo).order_by(Documento.version.desc()).all()
-        for doc in versiones:
-            if doc.hash_contenido == hash_nuevo:
-                return jsonify({"error": f"Ya existe una versión con el mismo contenido (v{doc.version})"}), 400
+            from io import BytesIO
+            hash_nuevo = hash_file(BytesIO(data))
 
-        version = versiones[0].version + 1 if versiones else 1
-        # Guardamos con nombre aleatorio + versionado opcional en DB, no en el FS
-        nombre_fs = nombre_archivo_final  # nombre físico seguro y opaco
-        if version > 1:
-            # Si quieres versionar en FS también:
-            stem = Path(nombre_archivo_final).stem
-            ext = Path(nombre_archivo_final).suffix
-            nombre_fs = f"v{version}_{stem}{ext}"
+            nombre_original = secure_filename(file_storage.filename)
+            tipo = Path(nombre_archivo_final).suffix.lower().lstrip(".")
+            grupo = nombre_original
 
-        # 3) Persistencia en disco (único punto de escritura)
-        ruta = save_bytes(UPLOAD_DIR, nombre_fs, data)
+            versiones = Documento.query.filter_by(grupo=grupo).order_by(Documento.version.desc()).all()
+            for doc in versiones:
+                if doc.hash_contenido == hash_nuevo:
+                    resultados.append({
+                        "nombre": nombre_original,
+                        "error": f"Ya existe una versión con el mismo contenido (v{doc.version})"
+                    })
+                    break
+            else:
+                version = versiones[0].version + 1 if versiones else 1
+                nombre_fs = nombre_archivo_final
+                if version > 1:
+                    stem = Path(nombre_archivo_final).stem
+                    ext = Path(nombre_archivo_final).suffix
+                    nombre_fs = f"v{version}_{stem}{ext}"
 
-        # 4) Extracción de contenido para categorizar
-        try:
-            with open(ruta, "rb") as f:
-                texto_extraido, patrones = extraer_contenido(f, tipo)
-        except Exception as ex:
-            app.logger.error(f"Error extrayendo contenido de {nombre_original}: {ex}")
-            return jsonify({"error": "Error extrayendo contenido"}), 400
+                ruta = save_bytes(UPLOAD_DIR, nombre_fs, data)
 
-        categoria = categorizar(nombre_original, texto_extraido or "", patrones or {})
+                try:
+                    with open(ruta, "rb") as f:
+                        texto_extraido, patrones = extraer_contenido(f, tipo)
+                except Exception as ex:
+                    app.logger.error(f"Error extrayendo contenido de {nombre_original}: {ex}")
+                    resultados.append({"nombre": nombre_original, "error": "Error extrayendo contenido"})
+                    continue
 
-        # 5) Guardado en DB: separa nombre físico (FS) del nombre visible si lo deseas
-        nuevo_doc = Documento(
-            nombre=nombre_fs,                  # nombre de archivo guardado en FS
-            tipo=tipo,
-            contenido=texto_extraido,
-            categoria=categoria,
-            fecha_subida=date.today().isoformat(),
-            version=version,
-            grupo=grupo,                       # agrupación por nombre original
-            hash_contenido=hash_nuevo,
-            usuario_id=session.get('user_id')  # dueño
-        )
+                categoria = categorizar(nombre_original, texto_extraido or "", patrones or {})
 
-        db.session.add(nuevo_doc)
-        db.session.commit()
+                nuevo_doc = Documento(
+                    nombre=nombre_fs,
+                    tipo=tipo,
+                    contenido=texto_extraido,
+                    categoria=categoria,
+                    fecha_subida=date.today().isoformat(),
+                    version=version,
+                    grupo=grupo,
+                    hash_contenido=hash_nuevo,
+                    usuario_id=session.get('user_id')
+                )
 
-        return jsonify({
-            "mensaje": f"Documento guardado como versión {version}",
-            "categoria": categoria,
-            "version": version,
-            "nombre_visible": nombre_original,
-            "id": nuevo_doc.id
-        })
+                db.session.add(nuevo_doc)
+                db.session.commit()
+
+                resultados.append({
+                    "mensaje": f"Documento guardado como versión {version}",
+                    "categoria": categoria,
+                    "version": version,
+                    "nombre_visible": nombre_original,
+                    "id": nuevo_doc.id
+                })
+
+        return jsonify(resultados)
 
     except Exception as e:
         traceback.print_exc()
@@ -142,14 +145,10 @@ def subir_documento():
         return jsonify({"error": "Error interno"}), 500
 
 
-
 # --- DOCUMENTOS ---
-
 @app.route("/documentos", methods=["GET"])
 @login_required
 def obtener_documentos():
-    # Si prefieres listar solo los del usuario, descomenta:
-    # documentos = Documento.query.filter_by(usuario_id=session.get('user_id')).all()
     documentos = Documento.query.all()
     return jsonify([{
         "id": doc.id,
@@ -164,8 +163,6 @@ def obtener_documentos():
 @login_required
 def obtener_documento(id):
     doc = Documento.query.get_or_404(id)
-    if doc.usuario_id != session.get('user_id'):
-        return jsonify({"error": "No autorizado"}), 403
     return jsonify({
         "id": doc.id,
         "nombre": doc.nombre,
@@ -180,45 +177,40 @@ def obtener_documento(id):
 @login_required
 def eliminar_documento(id):
     doc = Documento.query.get_or_404(id)
-    if doc.usuario_id != session.get('user_id'):
-        return jsonify({"error": "No autorizado"}), 403
     db.session.delete(doc)
     db.session.commit()
     return jsonify({"mensaje": "Documento eliminado"})
-
-
-# (ELIMINADO) Endpoint vulnerable por nombre de archivo
-# @app.route("/documentos/<nombre_archivo>")
-# @login_required
-# def servir_archivo(nombre_archivo):
-#     return send_from_directory(app.config['UPLOAD_FOLDER'], nombre_archivo, as_attachment=False)
 
 
 @app.route('/documentos/<int:id>/descargar')
 @login_required
 def descargar_documento(id):
     doc = Documento.query.get_or_404(id)
-    if doc.usuario_id != session.get('user_id'):
-        return jsonify({"error": "No autorizado"}), 403
     return send_from_directory(UPLOAD_DIR, doc.nombre, as_attachment=True)
 
 
-@app.route('/ver_docx')
+@app.route("/documentos/<nombre_archivo>")
+@login_required
+def servir_archivo(nombre_archivo):
+    # Asegura que el nombre de archivo sea seguro
+    nombre_archivo = secure_filename(nombre_archivo)
+    return send_from_directory(UPLOAD_DIR, nombre_archivo, as_attachment=False)
+
+
+@app.route('/ver_docx')  # (No usada actualmente si no tienes visor docx)
 @login_required
 def ver_docx():
     nombre = request.args.get("nombre")
     return render_template("ver_docx.html", nombre=nombre)
 
-# --- GRAFICAR DATOS ---
 
+# --- GRAFICAR DATOS ---
 @app.route("/graficos")
 @login_required
 def graficar_datos():
     id_archivo = request.args.get("id")
     hojas = request.args.getlist("hojas")
     doc = Documento.query.get_or_404(id_archivo)
-    if doc.usuario_id != session.get('user_id'):
-        return jsonify({"error": "No autorizado"}), 403
     ruta = str(UPLOAD_DIR / doc.nombre)
 
     datos_para_graficar = {}
@@ -246,8 +238,6 @@ def graficar_datos():
 @login_required
 def obtener_hojas_o_columnas(id_archivo):
     doc = Documento.query.get_or_404(id_archivo)
-    if doc.usuario_id != session.get('user_id'):
-        return jsonify({"error": "No autorizado"}), 403
     ruta = str(UPLOAD_DIR / doc.nombre)
 
     try:
@@ -280,10 +270,6 @@ def graficos_multiples():
         if not doc:
             continue
 
-        if doc.usuario_id != session.get('user_id'):
-            resultado[doc.nombre] = [{"error": "No autorizado"}]
-            continue
-
         ruta = str(UPLOAD_DIR / doc.nombre)
 
         try:
@@ -311,14 +297,13 @@ def graficos_multiples():
     return jsonify(resultado)
 
 
-@app.route("/validar_graficable", methods=["POST"])
+@app.route("/validar_graficable", methods=["POST"])  # (No usada si no haces validación previa)
 @login_required
 def validar_graficable():
     archivo = request.files.get("archivo")
     if not archivo:
         return jsonify({"error": "No se recibió archivo"}), 400
 
-    # Usa la utilidad común para validar y obtener bytes
     nombre_tmp, data = ensure_allowed_and_name(archivo, allowed_exts={".xlsx", ".csv"})
     ruta_tmp = str(UPLOAD_DIR / f"tmp_{nombre_tmp}")
 

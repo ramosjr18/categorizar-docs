@@ -19,6 +19,10 @@ class Documento(db.Model):
     grupo = db.Column(db.String(120), nullable=False, comment="Grupo base para agrupar versiones")
     hash_contenido = db.Column(db.String(64), nullable=True, comment="Hash SHA-256 del contenido")
 
+    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
+
+    usuario = db.relationship('Usuario', backref=db.backref('documentos', lazy=True))
+
     def __repr__(self):
         return f"<Documento {self.nombre} v{self.version} ({self.categoria})>"
 

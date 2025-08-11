@@ -1,3 +1,6 @@
+// === CONFIGURACIÓN GLOBAL ===
+const API_BASE_URL = "http://localhost:5000"; // 🔹 Cambia aquí si el backend está en otro host/puerto
+
 const contenedor = document.getElementById("contenedorCategorias");
 const filtro = document.getElementById("filtroCategoria");
 
@@ -42,7 +45,7 @@ function obtenerNombrePersonalizado(doc) {
 
 async function fetchArchivoParaValidar(doc) {
   try {
-    const url = `http://localhost:5000/documentos/${doc.id}/descargar`;
+    const url = `${API_BASE_URL}/documentos/${doc.id}/descargar`;
     const res = await fetch(url, { credentials: 'include' });
     if (!res.ok) throw new Error('No se pudo descargar archivo');
     const blob = await res.blob();
@@ -61,7 +64,7 @@ async function esArchivoGraficable(doc) {
 
   try {
     const formData = await fetchArchivoParaValidar(doc);
-    const response = await fetch('http://localhost:5000/validar_graficable', {
+    const response = await fetch(`${API_BASE_URL}/validar_graficable`, {
       method: 'POST',
       body: formData,
       credentials: 'include'
@@ -80,7 +83,7 @@ async function esArchivoGraficable(doc) {
 
 async function cargarDocumentos(categoria = "todas") {
   try {
-    const res = await fetch("http://localhost:5000/documentos", {
+    const res = await fetch(`${API_BASE_URL}/documentos`, {
       credentials: 'include'
     });
     if (!res.ok) throw new Error("Error al obtener documentos");
@@ -140,13 +143,13 @@ async function cargarDocumentos(categoria = "todas") {
 
         if (!esXlsxOCsv) {
           if (esDocx) {
-            botonVer = `<button onclick="window.open('http://localhost:5000/ver_docx?nombre=${doc.nombre}', '_blank')">Ver</button>`;
+            botonVer = `<button onclick="window.open('${API_BASE_URL}/ver_docx?nombre=${doc.nombre}', '_blank')">Ver</button>`;
           } else {
             botonVer = `<button onclick="window.open('preview.html?nombre=${doc.nombre}', '_blank')">Ver</button>`;
           }
         }
 
-        const botonDescargar = `<button onclick="window.open('http://localhost:5000/documentos/${doc.id}/descargar', '_blank')">Descargar</button>`;
+        const botonDescargar = `<button onclick="window.open('${API_BASE_URL}/documentos/${doc.id}/descargar', '_blank')">Descargar</button>`;
 
         item.innerHTML = `
           ${nombrePersonalizado}
@@ -168,24 +171,9 @@ async function cargarDocumentos(categoria = "todas") {
   }
 }
 
-async function verContenido(id) {
-  try {
-    const res = await fetch(`http://localhost:5000/documentos/${id}`, {
-      credentials: 'include'
-    });
-    if (!res.ok) throw new Error("No se pudo obtener el contenido");
-
-    const doc = await res.json();
-    mostrarMensaje(doc.contenido || "[Sin contenido]", "exito");
-  } catch (err) {
-    mostrarMensaje("❌ Error al obtener el contenido del documento.", "error");
-    console.error(err);
-  }
-}
-
 async function eliminar(id) {
   try {
-    const res = await fetch(`http://localhost:5000/documentos/${id}`, {
+    const res = await fetch(`${API_BASE_URL}/documentos/${id}`, {
       method: "DELETE",
       credentials: 'include'
     });
@@ -199,6 +187,7 @@ async function eliminar(id) {
   }
 }
 
+// --- Buscador ---
 document.getElementById("buscadorDocumentos").addEventListener("input", function () {
   const textoBusqueda = this.value.toLowerCase();
   const items = document.querySelectorAll("#contenedorCategorias li");
@@ -215,19 +204,22 @@ document.getElementById("buscadorDocumentos").addEventListener("input", function
   });
 });
 
+// --- Subida múltiple ---
 document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const archivo = e.target.archivo.files[0];
-  if (!archivo) {
-    mostrarMensaje("⚠️ Debes seleccionar un archivo.", "error");
+  const archivos = e.target.archivo.files;
+  if (!archivos.length) {
+    mostrarMensaje("⚠️ Debes seleccionar al menos un archivo.", "error");
     return;
   }
 
   const formData = new FormData();
-  formData.append("archivo", archivo);
+  for (let file of archivos) {
+    formData.append("archivo", file);
+  }
 
   try {
-    const res = await fetch("http://localhost:5000/upload", {
+    const res = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
       body: formData,
       credentials: 'include'
@@ -241,7 +233,7 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       return;
     }
 
-    mostrarMensaje("✅ Archivo subido correctamente", "exito");
+    mostrarMensaje("✅ Archivo(s) subido(s) correctamente", "exito");
     cargarDocumentos(filtro.value);
 
   } catch (err) {
@@ -255,14 +247,11 @@ document.getElementById("aplicarFiltro").addEventListener("click", () => {
   cargarDocumentos(categoria);
 });
 
-// --- NUEVO: Verificar sesión al inicio y redirigir si no hay ---
+// --- Verificar sesión ---
 async function verificarSesion() {
   try {
-    const res = await fetch('http://localhost:5000/api/check-session', {
-      credentials: 'include'
-    });
+    const res = await fetch(`${API_BASE_URL}/api/check-session`, { credentials: 'include' });
     if (!res.ok) {
-      // No autorizado: redirigir al login
       window.location.href = '/login.html';
       return false;
     }
