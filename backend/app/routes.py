@@ -2,7 +2,9 @@ import os
 import traceback
 import pandas as pd
 from datetime import date
-from flask import request, jsonify, send_from_directory, render_template, session, redirect
+from pathlib import Path
+
+from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, current_app
 from werkzeug.utils import secure_filename
 
 from . import app, db
@@ -11,8 +13,8 @@ from .utils.ocr import extraer_contenido
 from .utils.categorize import categorizar
 from .utils.file_comparator import hash_file
 from .utils.es_graficable import es_graficable
-from .auth_routes import login_required, login_required
-
+from .auth_routes import login_required
+from .utils_fs import ensure_dir  # <- ya creado por ti
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
 @app.before_request
@@ -32,6 +34,8 @@ def proteger_todas_rutas():
     if 'user_id' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
+# Carpeta de uploads (asegurada)
+UPLOAD_DIR = ensure_dir(Path(app.config.get('UPLOAD_FOLDER', 'uploads')))
 
 # --- PÁGINAS PRINCIPALES ---
 
@@ -85,7 +89,7 @@ def subir_documento():
 
         version = versiones[0].version + 1 if versiones else 1
         nombre_versionado = f"v{version}_{nombre}" if version > 1 else nombre
-        ruta = os.path.join(app.config['UPLOAD_FOLDER'], nombre_versionado)
+        ruta = str(UPLOAD_DIR / nombre_versionado)
 
         archivo.seek(0)
         archivo.save(ruta)
@@ -107,7 +111,9 @@ def subir_documento():
             fecha_subida=date.today().isoformat(),
             version=version,
             grupo=grupo,
-            hash_contenido=hash_nuevo
+            hash_contenido=hash_nuevo,
+            # << clave para validar descargas >>
+            usuario_id=session.get('user_id')
         )
 
         db.session.add(nuevo_doc)
@@ -130,6 +136,8 @@ def subir_documento():
 @app.route("/documentos", methods=["GET"])
 @login_required
 def obtener_documentos():
+    # Si prefieres listar solo los del usuario, descomenta:
+    # documentos = Documento.query.filter_by(usuario_id=session.get('user_id')).all()
     documentos = Documento.query.all()
     return jsonify([{
         "id": doc.id,
@@ -144,6 +152,8 @@ def obtener_documentos():
 @login_required
 def obtener_documento(id):
     doc = Documento.query.get_or_404(id)
+    if doc.usuario_id != session.get('user_id'):
+        return jsonify({"error": "No autorizado"}), 403
     return jsonify({
         "id": doc.id,
         "nombre": doc.nombre,
@@ -158,22 +168,27 @@ def obtener_documento(id):
 @login_required
 def eliminar_documento(id):
     doc = Documento.query.get_or_404(id)
+    if doc.usuario_id != session.get('user_id'):
+        return jsonify({"error": "No autorizado"}), 403
     db.session.delete(doc)
     db.session.commit()
     return jsonify({"mensaje": "Documento eliminado"})
 
 
-@app.route("/documentos/<nombre_archivo>")
-@login_required
-def servir_archivo(nombre_archivo):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], nombre_archivo, as_attachment=False)
+# (ELIMINADO) Endpoint vulnerable por nombre de archivo
+# @app.route("/documentos/<nombre_archivo>")
+# @login_required
+# def servir_archivo(nombre_archivo):
+#     return send_from_directory(app.config['UPLOAD_FOLDER'], nombre_archivo, as_attachment=False)
 
 
 @app.route('/documentos/<int:id>/descargar')
 @login_required
 def descargar_documento(id):
     doc = Documento.query.get_or_404(id)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], doc.nombre, as_attachment=True)
+    if doc.usuario_id != session.get('user_id'):
+        return jsonify({"error": "No autorizado"}), 403
+    return send_from_directory(UPLOAD_DIR, doc.nombre, as_attachment=True)
 
 
 @app.route('/ver_docx')
@@ -190,7 +205,9 @@ def graficar_datos():
     id_archivo = request.args.get("id")
     hojas = request.args.getlist("hojas")
     doc = Documento.query.get_or_404(id_archivo)
-    ruta = os.path.join(app.config['UPLOAD_FOLDER'], doc.nombre)
+    if doc.usuario_id != session.get('user_id'):
+        return jsonify({"error": "No autorizado"}), 403
+    ruta = str(UPLOAD_DIR / doc.nombre)
 
     datos_para_graficar = {}
 
@@ -217,7 +234,9 @@ def graficar_datos():
 @login_required
 def obtener_hojas_o_columnas(id_archivo):
     doc = Documento.query.get_or_404(id_archivo)
-    ruta = os.path.join(app.config['UPLOAD_FOLDER'], doc.nombre)
+    if doc.usuario_id != session.get('user_id'):
+        return jsonify({"error": "No autorizado"}), 403
+    ruta = str(UPLOAD_DIR / doc.nombre)
 
     try:
         if doc.tipo == "xlsx":
@@ -249,7 +268,11 @@ def graficos_multiples():
         if not doc:
             continue
 
-        ruta = os.path.join(app.config['UPLOAD_FOLDER'], doc.nombre)
+        if doc.usuario_id != session.get('user_id'):
+            resultado[doc.nombre] = [{"error": "No autorizado"}]
+            continue
+
+        ruta = str(UPLOAD_DIR / doc.nombre)
 
         try:
             if doc.tipo == "xlsx":
@@ -287,7 +310,7 @@ def validar_graficable():
     if not (nombre_seguro.endswith(".xlsx") or nombre_seguro.endswith(".csv")):
         return jsonify({"graficable": False, "mensaje": "Formato no soportado"}), 400
 
-    ruta_tmp = os.path.join(app.config['UPLOAD_FOLDER'], f"tmp_{nombre_seguro}")
+    ruta_tmp = str(UPLOAD_DIR / f"tmp_{nombre_seguro}")
 
     try:
         archivo.save(ruta_tmp)
@@ -302,6 +325,7 @@ def validar_graficable():
             app.logger.warning(f"No se pudo eliminar temporal: {e}")
 
     return jsonify({"graficable": es_valido})
+
 
 @app.route('/api/check-session')
 def check_session():
