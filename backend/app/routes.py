@@ -135,7 +135,7 @@ def subir_documento():
             nombre_archivo_final, data = ensure_allowed_and_name(file_storage)
             hash_nuevo = hash_file(BytesIO(data))
 
-            nombre_original = secure_filename(file_storage.filename)
+            nombre_original = secure_filename(Path(file_storage.filename).name)
             tipo_subida = Path(nombre_archivo_final).suffix.lower().lstrip(".")
 
             # Regla actual de agrupación por nombre visible (tú ya la usas)
