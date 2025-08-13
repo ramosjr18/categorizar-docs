@@ -342,33 +342,11 @@ def servir_archivo(nombre_archivo):
                      download_name=doc.nombre)
 
 
-@app.route("/ver_docx")
+@app.route('/ver_docx')
 @login_required
 def ver_docx():
     nombre = request.args.get("nombre")
-    if not nombre:
-        return jsonify({"error": "Falta el parámetro 'nombre'"}), 400
-
-    seguro = secure_filename(Path(nombre).name)
-    if not seguro:
-        return jsonify({"error": "Nombre inválido"}), 400
-
-    # Busca la última versión de ese nombre
-    doc = (Documento.query
-           .filter_by(nombre=seguro)
-           .order_by(Documento.version.desc())
-           .first_or_404())
-
-    path = ruta_fisica_de_documento(doc)
-    if not path.exists():
-        return jsonify({"error": "Archivo no encontrado"}), 404
-
-    mt, _ = mimetypes.guess_type(str(path))
-    return send_file(str(path),
-                     mimetype=mt or "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                     as_attachment=False,
-                     download_name=doc.nombre)
-
+    return render_template("ver_docx.html", nombre=nombre)
 
 # --- GRAFICAR DATOS ---
 @app.route("/graficos")
