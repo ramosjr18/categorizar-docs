@@ -20,6 +20,8 @@ from .auth_routes import login_required
 from .utils.utils_fs import ensure_dir
 from .utils.utils_uploads import ensure_allowed_and_name, save_bytes
 
+
+
 def ruta_fisica_de_documento(doc) -> Path:
     base = Path(UPLOAD_DIR)
     grupo_dir = secure_filename(Path(doc.grupo).stem) or "doc"
@@ -29,6 +31,19 @@ def ruta_fisica_de_documento(doc) -> Path:
     # Legacy: por compatibilidad si quedó plano
     legado = base / doc.nombre
     return legado
+
+
+@app.errorhandler(404)
+def not_found(e):
+    try:
+        return send_from_directory('frontend', '404.html'), 404
+    except Exception:
+        # Fallback por si falta el archivo
+        return ("<h1>404</h1><p>Página no encontrada</p>", 404)
+
+@app.route("/404")
+def show_404():
+    return send_from_directory('frontend', '404.html'), 404
 
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
@@ -41,6 +56,8 @@ def proteger_todas_rutas():
         '/register.html',
         '/',
         '/favicon.ico',
+        '/404',          
+        '/404.html',
     ]
     if any(request.path.startswith(r) for r in rutas_publicas):
         return
