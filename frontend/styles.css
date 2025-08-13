@@ -142,3 +142,25 @@ select {
   border: 2px dashed #4caf50;
   background-color: #f0fff0;
 }
+
+/* Modal genérico (si ya tienes estilos, mantén los tuyos) */
+.modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:999; }
+.modal.show { display:flex; align-items:center; justify-content:center; }
+.modal-content { background:#fff; padding:16px 20px; border-radius:12px; width:min(560px,92vw); box-shadow:0 10px 30px rgba(0,0,0,.25); }
+
+/* Modal decisión */
+.nombre-doc { font-weight:600; word-break:break-all; }
+.decision-row { display:flex; gap:16px; justify-content:space-between; align-items:center; margin:8px 0 6px; }
+.diff-wrap { margin:8px 0 10px; }
+.diff-label { margin-bottom:6px; }
+.diff-bar { height:10px; background:#eee; border-radius:999px; overflow:hidden; }
+.diff-bar-fill { height:100%; background:#2e86de; width:0%; transition:width .25s ease; }
+.diff-hint { font-size:.85rem; color:#666; margin-top:6px; }
+.decision-msg { margin:10px 0 0; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+.modal-actions button { padding:8px 14px; border-radius:8px; border:none; cursor:pointer; }
+.modal-actions .secondary { background:#eee; }
+.modal-actions .danger { background:#e74c3c; color:#fff; }
+.modal-actions .primary { background:#2e86de; color:#fff; }
+.kbd-hints { margin-top:10px; font-size:.9rem; color:#666; }
+.kbd-hints kbd { background:#f4f4f4; border:1px solid #ddd; border-bottom-width:2px; border-radius:4px; padding:1px 5px; }

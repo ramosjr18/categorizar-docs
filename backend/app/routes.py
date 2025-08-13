@@ -3,8 +3,10 @@ import traceback
 import pandas as pd
 from datetime import date
 from pathlib import Path
+from io import BytesIO
+from difflib import SequenceMatcher
 
-from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, current_app
+from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, current_app, send_file
 from werkzeug.utils import secure_filename
 
 from . import app, db
@@ -16,6 +18,23 @@ from .utils.es_graficable import es_graficable
 from .auth_routes import login_required
 from .utils.utils_fs import ensure_dir
 from .utils.utils_uploads import ensure_allowed_and_name, save_bytes
+
+def ruta_fisica_de_documento(doc) -> Path:
+    """
+    Construye la ruta del archivo según el esquema nuevo.
+    Si no existe (caso legacy), cae al esquema anterior.
+    """
+    base = Path(UPLOAD_DIR)
+
+    # Esquema nuevo: <UPLOAD_DIR>/<grupo_dir>/v{version}/<nombre_original>
+    grupo_dir = secure_filename(Path(doc.grupo).stem) or "doc"
+    candidato = base / grupo_dir / f"v{doc.version}" / doc.nombre
+    if candidato.exists():
+        return candidato
+
+    # Esquema legacy (por si tienes archivos con 'v{n}_' en el nombre directamente)
+    legado = base / doc.nombre
+    return legado
 
 
 # --- PROTECCIÓN GLOBAL DE RUTAS ---
@@ -66,58 +85,142 @@ def admin_panel():
 
 
 # --- SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ---
+from flask import request, jsonify, session
+from werkzeug.utils import secure_filename
+from pathlib import Path
+from io import BytesIO
+from difflib import SequenceMatcher
+from datetime import date
+
 @app.route("/upload", methods=["POST"])
 @login_required
 def subir_documento():
+    """
+    Cambios:
+    - Se guarda SIEMPRE con el nombre ORIGINAL del archivo.
+    - La versión se maneja con subcarpetas: <UPLOAD_DIR>/<grupo_sanitizado>/v{version}/<nombre_original>
+    - Si difiere ≥1% y el nombre coincide (mismo grupo), pide decisión (409) o aplica estrategia replace/new_version.
+    - El campo Documento.nombre guarda el NOMBRE ORIGINAL (no la ruta).
+    """
     try:
-        archivos = request.files.getlist("archivo")  # Soporte múltiples archivos
+        archivos = request.files.getlist("archivo")
         if not archivos:
             return jsonify({"error": "No se recibieron archivos"}), 400
 
+        estrategia = (request.form.get("estrategia") or request.args.get("estrategia") or "").strip().lower()
         resultados = []
+        UMBRAL_IGUAL = 0.99  # ≥99% = igual
+
+        def _sim_texto(a: str, b: str) -> float:
+            a = (a or "").strip(); b = (b or "").strip()
+            if not a and not b:
+                return 1.0
+            return SequenceMatcher(None, a, b).ratio()
+
+        def _grupo_dir(nombre_visible: str) -> str:
+            # Carpeta base para el grupo (usa el "nombre original" como hoy, sin extensión)
+            stem = Path(nombre_visible).stem
+            safe = secure_filename(stem) or "doc"
+            return safe
+
+        def _ruta_destino(grupo_visible: str, version: int, nombre_original: str) -> Path:
+            # <UPLOAD_DIR>/<grupo>/v{version}/<nombre_original>
+            base = Path(UPLOAD_DIR)
+            carpeta = base / _grupo_dir(grupo_visible) / f"v{version}"
+            carpeta.mkdir(parents=True, exist_ok=True)
+            return carpeta / nombre_original
 
         for file_storage in archivos:
+            # --- 1) Validación / preparación ---
             nombre_archivo_final, data = ensure_allowed_and_name(file_storage)
-
-            from io import BytesIO
             hash_nuevo = hash_file(BytesIO(data))
 
             nombre_original = secure_filename(file_storage.filename)
-            tipo = Path(nombre_archivo_final).suffix.lower().lstrip(".")
+            tipo_subida = Path(nombre_archivo_final).suffix.lower().lstrip(".")
+
+            # Regla actual de agrupación por nombre visible (tú ya la usas)
             grupo = nombre_original
 
-            versiones = Documento.query.filter_by(grupo=grupo).order_by(Documento.version.desc()).all()
-            for doc in versiones:
-                if doc.hash_contenido == hash_nuevo:
+            # Extraer texto (antes de escribir a disco)
+            try:
+                texto_nuevo, patrones_nuevo = extraer_contenido(BytesIO(data), tipo_subida)
+            except Exception as ex:
+                app.logger.error(f"Error extrayendo contenido de {nombre_original}: {ex}")
+                resultados.append({"nombre": nombre_original, "error": "Error extrayendo contenido"})
+                continue
+
+            # --- 2) Buscar versiones previas del mismo grupo ---
+            versiones = (Documento.query
+                         .filter_by(grupo=grupo)
+                         .order_by(Documento.version.desc())
+                         .all())
+
+            # Duplicado exacto por hash
+            duplicado = next((doc for doc in versiones if doc.hash_contenido == hash_nuevo), None)
+            if duplicado:
+                resultados.append({
+                    "nombre": nombre_original,
+                    "error": f"Ya existe una versión con el mismo contenido (v{duplicado.version})"
+                })
+                continue
+
+            if versiones:
+                actual = versiones[0]  # última versión
+                sim = _sim_texto(texto_nuevo, actual.contenido or "")
+
+                if sim >= UMBRAL_IGUAL:
                     resultados.append({
                         "nombre": nombre_original,
-                        "error": f"Ya existe una versión con el mismo contenido (v{doc.version})"
+                        "error": f"Documento ya registrado (v{actual.version}), similitud {sim:.2%}"
                     })
-                    break
-            else:
-                version = versiones[0].version + 1 if versiones else 1
-                nombre_fs = nombre_archivo_final
-                if version > 1:
-                    stem = Path(nombre_archivo_final).stem
-                    ext = Path(nombre_archivo_final).suffix
-                    nombre_fs = f"v{version}_{stem}{ext}"
-
-                ruta = save_bytes(UPLOAD_DIR, nombre_fs, data)
-
-                try:
-                    with open(ruta, "rb") as f:
-                        texto_extraido, patrones = extraer_contenido(f, tipo)
-                except Exception as ex:
-                    app.logger.error(f"Error extrayendo contenido de {nombre_original}: {ex}")
-                    resultados.append({"nombre": nombre_original, "error": "Error extrayendo contenido"})
                     continue
 
-                categoria = categorizar(nombre_original, texto_extraido or "", patrones or {})
+                # Cambia ≥1%: pedir decisión si no vino estrategia
+                if estrategia not in ("replace", "new_version"):
+                    resultados.append({
+                        "nombre": nombre_original,
+                        "requires_decision": True,
+                        "opciones": ["replace", "new_version"],
+                        "mensaje": (f"Cambio detectado de {100*(1-sim):.2f}% respecto a v{actual.version}. "
+                                    "¿Reemplazar esa versión o crear una nueva?"),
+                        "version_actual": actual.version
+                    })
+                    continue
+
+                if estrategia == "replace":
+                    # Guardar en el MISMO path de la versión actual, con el nombre ORIGINAL (actual.nombre)
+                    destino = _ruta_destino(actual.grupo, actual.version, actual.nombre)
+                    destino.write_bytes(data)
+
+                    categoria = categorizar(nombre_original, texto_nuevo or "", patrones_nuevo or {})
+                    # Mantener nombre original en DB:
+                    actual.contenido = texto_nuevo
+                    actual.categoria = categoria
+                    actual.hash_contenido = hash_nuevo
+                    actual.fecha_subida = date.today().isoformat()
+                    actual.tipo = Path(actual.nombre).suffix.lower().lstrip(".") or tipo_subida
+                    db.session.commit()
+
+                    resultados.append({
+                        "mensaje": f"Documento reemplazado (v{actual.version})",
+                        "categoria": categoria,
+                        "version": actual.version,
+                        "nombre_visible": nombre_original,
+                        "id": actual.id
+                    })
+                    continue
+
+                # estrategia == "new_version" → crear nueva subcarpeta v{n+1}, conservar nombre original
+                version = actual.version + 1
+                destino = _ruta_destino(grupo, version, nombre_original)
+                destino.write_bytes(data)
+
+                categoria = categorizar(nombre_original, texto_nuevo or "", patrones_nuevo or {})
 
                 nuevo_doc = Documento(
-                    nombre=nombre_fs,
-                    tipo=tipo,
-                    contenido=texto_extraido,
+                    nombre=nombre_original,               # ← Guarda SOLO el nombre original
+                    tipo=Path(nombre_original).suffix.lower().lstrip("."),
+                    contenido=texto_nuevo,
                     categoria=categoria,
                     fecha_subida=date.today().isoformat(),
                     version=version,
@@ -125,7 +228,35 @@ def subir_documento():
                     hash_contenido=hash_nuevo,
                     usuario_id=session.get('user_id')
                 )
+                db.session.add(nuevo_doc)
+                db.session.commit()
 
+                resultados.append({
+                    "mensaje": f"Documento guardado como versión {version}",
+                    "categoria": categoria,
+                    "version": version,
+                    "nombre_visible": nombre_original,
+                    "id": nuevo_doc.id
+                })
+            else:
+                # Primera versión (v1), conservar nombre original
+                version = 1
+                destino = _ruta_destino(grupo, version, nombre_original)
+                destino.write_bytes(data)
+
+                categoria = categorizar(nombre_original, texto_nuevo or "", patrones_nuevo or {})
+
+                nuevo_doc = Documento(
+                    nombre=nombre_original,               # ← Guarda SOLO el nombre original
+                    tipo=Path(nombre_original).suffix.lower().lstrip("."),
+                    contenido=texto_nuevo,
+                    categoria=categoria,
+                    fecha_subida=date.today().isoformat(),
+                    version=version,
+                    grupo=grupo,
+                    hash_contenido=hash_nuevo,
+                    usuario_id=session.get('user_id')
+                )
                 db.session.add(nuevo_doc)
                 db.session.commit()
 
@@ -137,9 +268,13 @@ def subir_documento():
                     "id": nuevo_doc.id
                 })
 
+        if any(r.get("requires_decision") for r in resultados):
+            return jsonify(resultados), 409
+
         return jsonify(resultados)
 
     except Exception as e:
+        import traceback
         traceback.print_exc()
         app.logger.error(f"Error interno en subir_documento: {e}")
         return jsonify({"error": "Error interno"}), 500
@@ -182,11 +317,14 @@ def eliminar_documento(id):
     return jsonify({"mensaje": "Documento eliminado"})
 
 
-@app.route('/documentos/<int:id>/descargar')
+@app.route("/documentos/<int:doc_id>/descargar")
 @login_required
-def descargar_documento(id):
-    doc = Documento.query.get_or_404(id)
-    return send_from_directory(UPLOAD_DIR, doc.nombre, as_attachment=True)
+def descargar(doc_id):
+    doc = Documento.query.get_or_404(doc_id)
+    path = ruta_fisica_de_documento(doc)
+    if not path.exists():
+        return jsonify({"error": "Archivo no encontrado"}), 404
+    return send_file(str(path), as_attachment=True, download_name=doc.nombre)
 
 
 @app.route("/documentos/<nombre_archivo>")
@@ -197,11 +335,13 @@ def servir_archivo(nombre_archivo):
     return send_from_directory(UPLOAD_DIR, nombre_archivo, as_attachment=False)
 
 
-@app.route('/ver_docx')  # (No usada actualmente si no tienes visor docx)
+@app.route("/ver_docx")
 @login_required
 def ver_docx():
-    nombre = request.args.get("nombre")
-    return render_template("ver_docx.html", nombre=nombre)
+    nombre = request.args.get("nombre")  # opcional si también pasas id
+    doc = Documento.query.filter_by(nombre=nombre).order_by(Documento.version.desc()).first_or_404()
+    path = ruta_fisica_de_documento(doc)
+    # ... abrir/convertir docx desde 'path'
 
 
 # --- GRAFICAR DATOS ---

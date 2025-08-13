@@ -1,11 +1,18 @@
 // === CONFIGURACIÓN GLOBAL ===
-const API_BASE_URL = "http://localhost:5000"; // 🔹 Cambia aquí si el backend está en otro host/puerto
+const API_BASE_URL = "http://localhost:5000"; // Cambia si tu backend está en otro host/puerto
 
 const contenedor = document.getElementById("contenedorCategorias");
 const filtro = document.getElementById("filtroCategoria");
 
 let timeoutMensaje;
 
+// Guardamos selección de archivos para poder reintentar con estrategia
+window.__archivosSeleccionados = [];
+
+// Extensiones permitidas (solo estas)
+const EXT_PERMITIDAS = ["pdf", "xlsx", "docx", "csv"];
+
+// ============ Utilidades base ============
 function mostrarMensaje(texto, tipo = "error", duracion = 10000) {
   const mensaje = document.getElementById("mensaje");
 
@@ -30,6 +37,223 @@ function mostrarMensaje(texto, tipo = "error", duracion = 10000) {
   }, duracion);
 }
 
+function ext(name) {
+  return String(name || "").toLowerCase().split(".").pop();
+}
+
+function esPermitido(file) {
+  return EXT_PERMITIDAS.includes(ext(file.name));
+}
+
+function filtrarArchivos(archivosLike) {
+  const arr = Array.from(archivosLike || []);
+  const permitidos = arr.filter(esPermitido);
+  const rechazados = arr.filter(f => !esPermitido(f));
+  if (rechazados.length) {
+    const lista = rechazados.map(f => f.name).slice(0, 5).join(", ");
+    mostrarMensaje(`⚠️ Se omiten archivos no permitidos: ${lista}${rechazados.length > 5 ? "…" : ""}`, "error", 7000);
+  }
+  return permitidos;
+}
+
+function aproximarNombre(nombre) {
+  return String(nombre || "")
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_.-]/g, "");
+}
+
+function buscarFilePorNombreServidor(nombreServidor) {
+  const lista = window.__archivosSeleccionados || [];
+  // 1) Exacto
+  let f = lista.find(f => f.name === nombreServidor);
+  if (f) return f;
+  // 2) Normalizado
+  const normServ = aproximarNombre(nombreServidor);
+  f = lista.find(ff => aproximarNombre(ff.name) === normServ);
+  if (f) return f;
+  // 3) Basename
+  const baseServ = nombreServidor.split("/").pop();
+  f = lista.find(ff => aproximarNombre(ff.name.split("/").pop()) === aproximarNombre(baseServ));
+  return f || null;
+}
+
+// ============ Modal de DECISIÓN (409) ============
+const modalDecision = document.getElementById("modalDecision");
+const decisionNombre = document.getElementById("decisionNombre");
+const decisionVersion = document.getElementById("decisionVersion");
+const decisionMensaje = document.getElementById("decisionMensaje");
+const decisionDiffText = document.getElementById("decisionDiffText");
+const decisionDiffBar = document.getElementById("decisionDiffBar");
+
+const btnReplace = document.getElementById("btnReplace");
+const btnNewVersion = document.getElementById("btnNewVersion");
+const btnOmitir = document.getElementById("btnOmitir");
+
+let __onKeyDownHandler = null;
+
+// Intenta extraer "12.34%" desde textos como "Cambio detectado de 12.34% respecto a v3"
+function parseDiffPercent(texto) {
+  const m = String(texto || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  const p = m ? parseFloat(m[1]) : NaN;
+  return Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : null;
+}
+
+function abrirModalDecision({ nombre, version, mensaje, diffPercent }) {
+  decisionNombre.textContent = nombre || "";
+  decisionVersion.textContent = version != null ? version : "?";
+  decisionMensaje.textContent = mensaje || "";
+
+  const p = diffPercent != null ? diffPercent : parseDiffPercent(mensaje);
+  const pctText = p != null ? `${p.toFixed(2)}%` : "—";
+  decisionDiffText.textContent = pctText;
+  decisionDiffBar.style.width = p != null ? `${p}%` : "0%";
+
+  // Color según magnitud del cambio
+  if (p == null) {
+    decisionDiffBar.style.background = "#888";
+  } else if (p < 1) {
+    decisionDiffBar.style.background = "#27ae60"; // verde (cambio bajo)
+  } else if (p < 10) {
+    decisionDiffBar.style.background = "#f1c40f"; // amarillo
+  } else {
+    decisionDiffBar.style.background = "#e67e22"; // anaranjado/alto
+  }
+
+  modalDecision.classList.add("show");
+  modalDecision.setAttribute("aria-hidden", "false");
+
+  // Atajos de teclado: R / N / Esc / Enter
+  __onKeyDownHandler = (ev) => {
+    const k = ev.key.toLowerCase();
+    if (k === "escape") { btnOmitir.click(); }
+    else if (k === "r") { btnReplace.click(); }
+    else if (k === "n") { btnNewVersion.click(); }
+    else if (k === "enter") { btnNewVersion.click(); } // por defecto: nueva versión
+  };
+  document.addEventListener("keydown", __onKeyDownHandler);
+}
+
+function cerrarModalDecision() {
+  modalDecision.classList.remove("show");
+  modalDecision.setAttribute("aria-hidden", "true");
+  if (__onKeyDownHandler) {
+    document.removeEventListener("keydown", __onKeyDownHandler);
+    __onKeyDownHandler = null;
+  }
+}
+
+/**
+ * Muestra modal y resuelve con "replace" | "new_version" | null (si omite)
+ */
+function pedirDecisionModal(item) {
+  return new Promise((resolve) => {
+    const nombre = item?.nombre || "";
+    const version = item?.version_actual ?? "?";
+    const mensaje = item?.mensaje || "";
+
+    abrirModalDecision({
+      nombre,
+      version,
+      mensaje,
+      diffPercent: parseDiffPercent(mensaje)
+    });
+
+    const onReplace = () => { limpiar(); resolve("replace"); };
+    const onNewVersion = () => { limpiar(); resolve("new_version"); };
+    const onOmitir = () => { limpiar(); resolve(null); };
+
+    function limpiar() {
+      btnReplace.removeEventListener("click", onReplace);
+      btnNewVersion.removeEventListener("click", onNewVersion);
+      btnOmitir.removeEventListener("click", onOmitir);
+      cerrarModalDecision();
+    }
+
+    btnReplace.addEventListener("click", onReplace);
+    btnNewVersion.addEventListener("click", onNewVersion);
+    btnOmitir.addEventListener("click", onOmitir);
+  });
+}
+
+// ============ Lógica de reintento/409 ============
+async function reenviarConEstrategia(file, estrategia) {
+  const form = new FormData();
+  form.append("archivo", file);
+  form.append("estrategia", estrategia);
+
+  const res = await fetch(`${API_BASE_URL}/upload`, {
+    method: "POST",
+    body: form,
+    credentials: "include",
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 409) {
+    // Vuelve a requerir decisión por algún motivo extraño
+    const conflictos = (Array.isArray(data) ? data : []).filter(x => x.requires_decision);
+    for (const c of conflictos) {
+      const eleccion = await pedirDecisionModal(c);
+      if (!eleccion) {
+        mostrarMensaje(`⏭️ Omitido: ${c.nombre}`, "error");
+        continue;
+      }
+      const file2 = buscarFilePorNombreServidor(c.nombre);
+      if (!file2) {
+        mostrarMensaje(`❌ No se encontró el archivo local para reintentar: ${c.nombre}`, "error");
+        continue;
+      }
+      await reenviarConEstrategia(file2, eleccion);
+    }
+    return;
+  }
+
+  if (!res.ok) {
+    const mensajeError = data.error || "❌ Error aplicando estrategia al archivo.";
+    mostrarMensaje(mensajeError, "error");
+    console.error("Reintento con estrategia falló:", data);
+    return;
+  }
+
+  // Éxito
+  const msg = Array.isArray(data) ? (data[0]?.mensaje || "Procesado con éxito.") : (data.mensaje || "Procesado con éxito.");
+  mostrarMensaje(`✅ ${file.name}: ${msg}`, "exito", 6000);
+}
+
+async function manejarConflictosYReenviar(resultados) {
+  const conflictos = resultados.filter(r => r && r.requires_decision);
+  const otros = resultados.filter(r => r && !r.requires_decision);
+
+  // Mostrar feedback de no-conflictos
+  for (const item of otros) {
+    if (item.error) {
+      mostrarMensaje(`❌ ${item.nombre || ""}: ${item.error}`, "error");
+    } else if (item.mensaje) {
+      mostrarMensaje(`✅ ${item.nombre_visible || item.nombre || ""}: ${item.mensaje}`, "exito", 6000);
+    }
+  }
+
+  // Resolver conflictos uno por uno con modal
+  for (const item of conflictos) {
+    const file = buscarFilePorNombreServidor(item.nombre);
+    if (!file) {
+      mostrarMensaje(`❌ No se encontró el archivo local para decidir: ${item.nombre}`, "error");
+      continue;
+    }
+    const eleccion = await pedirDecisionModal(item);
+    if (!eleccion) {
+      mostrarMensaje(`⏭️ Omitido: ${item.nombre}`, "error");
+      continue;
+    }
+    await reenviarConEstrategia(file, eleccion);
+  }
+
+  // Refrescar lista al final
+  await cargarDocumentos(filtro.value);
+}
+
+// ============ Resto de utilidades existentes ============
 function obtenerNombrePersonalizado(doc) {
   switch (doc.categoria) {
     case "General": return `📄 ${doc.nombre}`;
@@ -143,9 +367,9 @@ async function cargarDocumentos(categoria = "todas") {
 
         if (!esXlsxOCsv) {
           if (esDocx) {
-            botonVer = `<button onclick="window.open('${API_BASE_URL}/ver_docx?nombre=${doc.nombre}', '_blank')">Ver</button>`;
+            botonVer = `<button onclick="window.open('${API_BASE_URL}/ver_docx?nombre=${encodeURIComponent(doc.nombre)}', '_blank')">Ver</button">`;
           } else {
-            botonVer = `<button onclick="window.open('preview.html?nombre=${doc.nombre}', '_blank')">Ver</button>`;
+            botonVer = `<button onclick="window.open('preview.html?nombre=${encodeURIComponent(doc.nombre)}', '_blank')">Ver</button>`;
           }
         }
 
@@ -204,19 +428,20 @@ document.getElementById("buscadorDocumentos").addEventListener("input", function
   });
 });
 
-// --- Subida múltiple ---
+// --- Subida múltiple desde ARCHIVOS ---
 document.getElementById("uploadForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const archivos = e.target.archivo.files;
+  const input = e.target.querySelector('#archivo');
+  let archivos = filtrarArchivos(input.files);
   if (!archivos.length) {
-    mostrarMensaje("⚠️ Debes seleccionar al menos un archivo.", "error");
+    mostrarMensaje("⚠️ Debes seleccionar al menos un archivo permitido (.pdf, .xlsx, .docx, .csv).", "error");
     return;
   }
 
+  window.__archivosSeleccionados = archivos;
+
   const formData = new FormData();
-  for (let file of archivos) {
-    formData.append("archivo", file);
-  }
+  for (let file of archivos) formData.append("archivo", file);
 
   try {
     const res = await fetch(`${API_BASE_URL}/upload`, {
@@ -226,6 +451,11 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
     });
 
     const data = await res.json();
+
+    if (res.status === 409 && Array.isArray(data)) {
+      await manejarConflictosYReenviar(data);
+      return;
+    }
 
     if (!res.ok) {
       const mensajeError = data.error || "❌ No se pudo subir el archivo.";
@@ -238,6 +468,44 @@ document.getElementById("uploadForm").addEventListener("submit", async (e) => {
 
   } catch (err) {
     mostrarMensaje("❌ No se pudo subir el archivo. Intenta nuevamente.", "error");
+    console.error(err);
+  }
+});
+
+// --- Subida múltiple desde CARPETA ---
+document.getElementById("uploadFolderForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const carpetaInput = document.getElementById('carpeta');
+  let archivos = filtrarArchivos(carpetaInput.files);
+  if (!archivos.length) {
+    mostrarMensaje("⚠️ La carpeta no contiene archivos permitidos (.pdf, .xlsx, .docx, .csv).", "error");
+    return;
+  }
+
+  window.__archivosSeleccionados = archivos;
+
+  const form = new FormData();
+  for (const f of archivos) form.append('archivo', f);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/upload`, {
+      method: 'POST',
+      body: form,
+      credentials: 'include'
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 409 && Array.isArray(data)) {
+      await manejarConflictosYReenviar(data);
+      return;
+    } else if (!res.ok) {
+      mostrarMensaje(data.error || "❌ Error subiendo carpeta.", "error");
+    } else {
+      mostrarMensaje("✅ Carpeta subida", "exito");
+      cargarDocumentos(filtro.value);
+    }
+  } catch (err) {
+    mostrarMensaje("❌ No se pudo subir la carpeta. Intenta nuevamente.", "error");
     console.error(err);
   }
 });
@@ -267,3 +535,10 @@ verificarSesion().then(estaLogueado => {
     cargarDocumentos();
   }
 });
+
+// --- Opcional: evitar error si se llama toggleModal() desde el HTML del modal de progreso ---
+function toggleModal() {
+  const modal = document.getElementById('modalProgreso');
+  if (!modal) return;
+  modal.classList.toggle('show');
+}
