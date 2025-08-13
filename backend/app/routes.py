@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 from io import BytesIO
 from difflib import SequenceMatcher
+import mimetypes
 
 from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, current_app, send_file
 from werkzeug.utils import secure_filename
@@ -20,19 +21,12 @@ from .utils.utils_fs import ensure_dir
 from .utils.utils_uploads import ensure_allowed_and_name, save_bytes
 
 def ruta_fisica_de_documento(doc) -> Path:
-    """
-    Construye la ruta del archivo según el esquema nuevo.
-    Si no existe (caso legacy), cae al esquema anterior.
-    """
     base = Path(UPLOAD_DIR)
-
-    # Esquema nuevo: <UPLOAD_DIR>/<grupo_dir>/v{version}/<nombre_original>
     grupo_dir = secure_filename(Path(doc.grupo).stem) or "doc"
-    candidato = base / grupo_dir / f"v{doc.version}" / doc.nombre
+    candidato = base / grupo_dir / f"v{int(doc.version)}" / doc.nombre
     if candidato.exists():
         return candidato
-
-    # Esquema legacy (por si tienes archivos con 'v{n}_' en el nombre directamente)
+    # Legacy: por compatibilidad si quedó plano
     legado = base / doc.nombre
     return legado
 
@@ -85,12 +79,6 @@ def admin_panel():
 
 
 # --- SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ---
-from flask import request, jsonify, session
-from werkzeug.utils import secure_filename
-from pathlib import Path
-from io import BytesIO
-from difflib import SequenceMatcher
-from datetime import date
 
 @app.route("/upload", methods=["POST"])
 @login_required
@@ -330,9 +318,28 @@ def descargar(doc_id):
 @app.route("/documentos/<nombre_archivo>")
 @login_required
 def servir_archivo(nombre_archivo):
-    # Asegura que el nombre de archivo sea seguro
-    nombre_archivo = secure_filename(nombre_archivo)
-    return send_from_directory(UPLOAD_DIR, nombre_archivo, as_attachment=False)
+    # Asegura que sea un basename seguro (sin ../ ni separadores)
+    seguro = secure_filename(Path(nombre_archivo).name)
+    if not seguro:
+        return jsonify({"error": "Nombre inválido"}), 400
+
+    # Busca el documento por nombre original y toma la última versión
+    doc = (Documento.query
+           .filter_by(nombre=seguro)
+           .order_by(Documento.version.desc())
+           .first())
+    if not doc:
+        return jsonify({"error": "Documento no encontrado"}), 404
+
+    path = ruta_fisica_de_documento(doc)
+    if not path.exists():
+        return jsonify({"error": "Archivo no encontrado en disco"}), 404
+
+    mt, _ = mimetypes.guess_type(str(path))
+    return send_file(str(path),
+                     mimetype=mt or "application/octet-stream",
+                     as_attachment=False,
+                     download_name=doc.nombre)
 
 
 @app.route("/ver_docx")
@@ -351,10 +358,13 @@ def graficar_datos():
     id_archivo = request.args.get("id")
     hojas = request.args.getlist("hojas")
     doc = Documento.query.get_or_404(id_archivo)
-    ruta = str(UPLOAD_DIR / doc.nombre)
+
+    path = ruta_fisica_de_documento(doc)
+    if not path.exists():
+        return jsonify({"error": "Archivo no encontrado"}), 404
+    ruta = str(path)  # <- pandas necesita str
 
     datos_para_graficar = {}
-
     try:
         if doc.tipo == "xlsx":
             hojas_dict = pd.read_excel(ruta, sheet_name=None)
@@ -372,6 +382,7 @@ def graficar_datos():
         return jsonify({"error": f"Error al procesar archivo: {str(e)}"}), 500
 
     return render_template("graficos.html", datos=datos_para_graficar)
+
 
 
 @app.route("/api/hojas/<int:id_archivo>")
@@ -410,7 +421,11 @@ def graficos_multiples():
         if not doc:
             continue
 
-        ruta = str(UPLOAD_DIR / doc.nombre)
+        path = ruta_fisica_de_documento(doc)
+        if not path.exists():
+            resultado[doc.nombre] = [{"error": "Archivo no encontrado"}]
+            continue
+        ruta = str(path)
 
         try:
             if doc.tipo == "xlsx":
