@@ -32,7 +32,6 @@ def ruta_fisica_de_documento(doc) -> Path:
     legado = base / doc.nombre
     return legado
 
-
 @app.errorhandler(404)
 def not_found(e):
     try:

@@ -1,5 +1,5 @@
+# app/__init__.py
 import os
-from datetime import timedelta
 import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -7,32 +7,44 @@ from flask_cors import CORS
 from flask_session import Session
 from .config import Config
 
-logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-app.config.from_object(Config)
+# Expone db y app a nivel de módulo para que routes.py pueda: from . import app, db
+db = SQLAlchemy()
+app = None  # se asignará dentro de create_app()
 
-CORS(app, supports_credentials=True, origins=["http://localhost:8000"])
+def create_app():
+    global app
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-Session(app)
+    # CORS
+    CORS(app, supports_credentials=True, origins=["http://localhost:8000"])
 
-# Definir carpeta uploads con ruta relativa segura
-basedir = os.path.abspath(os.path.dirname(__file__))
-upload_folder = os.path.join(basedir, '..', 'uploads')
-app.config['UPLOAD_FOLDER'] = upload_folder
-app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
-os.makedirs(upload_folder, exist_ok=True)
+    # Sessions
+    Session(app)
 
-db = SQLAlchemy(app)
+    # uploads/
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    upload_folder = os.path.join(basedir, '..', 'uploads')
+    app.config['UPLOAD_FOLDER'] = upload_folder
+    app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
+    os.makedirs(upload_folder, exist_ok=True)
 
-# Importar modelos y rutas después de crear db para evitar ciclos
-from . import models
-from .auth_routes import auth_bp
-app.register_blueprint(auth_bp)
-from . import routes
+    # DB
+    db.init_app(app)
 
-with app.app_context():
-    db.create_all()
+    # Importa modelos / blueprints / rutas DESPUÉS de crear app
+    from . import models  # noqa: F401
+    from .auth_routes import auth_bp
+    app.register_blueprint(auth_bp)
 
-logger.info("Aplicación Flask inicializada correctamente")
+    # Importa routes: aquí se ejecutan los @app.route y el handler 404
+    from . import routes  # noqa: F401
+
+    with app.app_context():
+        db.create_all()
+
+    logger.info("Aplicación Flask inicializada correctamente")
+    return app
