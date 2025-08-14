@@ -1,5 +1,6 @@
 // === CONFIGURACIÓN GLOBAL ===
 const API_BASE_URL = "http://localhost:5000"; // Cambia si tu backend está en otro host/puerto
+const API_BASE_URL_8000 = "http://localhost:8000";
 
 const contenedor = document.getElementById("contenedorCategorias");
 const filtro = document.getElementById("filtroCategoria");
@@ -360,8 +361,8 @@ async function cargarDocumentos(categoria = "todas") {
           esArchivoRealmenteGraficable = await esArchivoGraficable(doc);
           if (esArchivoRealmenteGraficable) {
             botonGraficar = esInventario
-              ? `<button onclick="window.open('inventario.html?id=${doc.id}', '_blank')">Graficar</button>`
-              : `<button onclick="window.open('ip-graficos.html?id=${doc.id}', '_blank')">Graficar</button>`;
+              ? `<button onclick="window.open('${API_BASE_URL_8000}/inventario.html?id=${doc.id}', '_blank')">Graficar</button>`
+              : `<button onclick="window.open('${API_BASE_URL_8000}/ip-graficos.html?id=${doc.id}', '_blank')">Graficar</button>`;
           }
         }
 
@@ -369,7 +370,7 @@ async function cargarDocumentos(categoria = "todas") {
           if (esDocx) {
             botonVer = `<button onclick="window.open('${API_BASE_URL}/ver_docx?nombre=${encodeURIComponent(doc.nombre)}', '_blank')">Ver</button">`;
           } else {
-            botonVer = `<button onclick="window.open('preview.html?nombre=${encodeURIComponent(doc.nombre)}', '_blank')">Ver</button>`;
+            botonVer = `<button onclick="window.open('${API_BASE_URL_8000}/preview.html?nombre=${encodeURIComponent(doc.nombre)}', '_blank')">Ver</button>`;
           }
         }
 

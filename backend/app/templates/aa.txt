@@ -134,3 +134,43 @@ Por favor, genera el JavaScript completo que cumpla con estas características p
 Además, quiero que el código sea claro y fácil de adaptar para mi lógica actual.
 
 Gracias.
+
+
+
+-------------------------------------------------------------------------
+el estilo de esto en vez de que se vea solo como grid quiero que se vea como pinterest de dos columnas y que se vaya mostrando el contenido asi
+<div id="contenedorCategorias" class="grid-container">
+<div class="categorias">…</div>
+</div>
+y luego quiero hacer esto tambien 
+Revisar que esté optimizado y limpio.
+Ajustar detalles como colores, spacing o responsive.
+Añadir estilos para que se vea mejor en pantallas pequeñas.
+pero que el estilo sea el mismo que use en el login. si no tienes el estilo del login claro me avisa sy te lo paso
+
+
+
+-------------------------------------------------------------------------
+
+
+Masonry
+¿Aplicamos el efecto masonry sobre los bloques de categoría (cada .categorias) —no sobre los li—, correcto?
+correcto
+
+Comportamiento en móvil
+¿Pasamos a 1 columna por debajo de, por ejemplo, 720px (o prefieres 768px)?
+si
+
+Look & feel del login en todo
+¿Extiendo la paleta y tokens del login (variables :root, radios, sombras) a tarjetas de categoría, botones, inputs, modales y mensajes?
+si
+
+Botones existentes
+¿Quieres que los <button> actuales hereden el estilo del login (tipo .btn) sin cambiar el HTML (solo con CSS), o aceptas que les añada la clase .btn en el render para unificar?
+que sea el mismo estilo
+
+Animación de revelado
+¿Fade + slide‑up suave al insertarse cada .categorias y cada li (respetando prefers-reduced-motion)?
+si
+
+http://localhost:5000/dashboard

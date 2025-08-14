@@ -15,10 +15,7 @@
   --radius: 12px;
   --shadow: 0 10px 30px rgba(0,0,0,0.35);
   --border: 1px solid rgba(255,255,255,0.08);
-  --gap: 20px;
-
-  /* Altura fija de cada tarjeta de categoría */
-  --cat-h: 620px;
+  --gap: 16px;
 }
 
 * { box-sizing: border-box; }
@@ -109,9 +106,10 @@ li {
 
 /* =============================
    MENSAJES / NOTIFICACIONES
+   (ocultos por defecto)
    ============================= */
 .mensaje {
-  display: hidden;                 /* oculto por defecto */
+  display: none;                 /* oculto hasta que haya contenido */
   margin-top: 1em;
   padding: 1em;
   border-radius: 10px;
@@ -124,73 +122,73 @@ li {
 .mensaje.exito  { background-color: rgba(34,197,94,0.12); color: #bbf7d0; border-color: rgba(34,197,94,.35); }
 
 /* =============================
-   GRID DE CATEGORÍAS (2 columnas fijas)
+   MASONRY "PINTEREST" (2 columnas)
    ============================= */
+/* Si el contenedor viene con .grid-container de otros lados, anulamos grid aquí */
 #contenedorCategorias.grid-container {
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--gap);
+  display: block !important;
+  grid-template-columns: unset !important;
+}
+
+/* Masonry por columns */
+#contenedorCategorias {
+  column-count: 2;
+  column-gap: 20px;
   max-width: 1200px;
   margin-inline: auto;
 }
 
-/* Tarjeta de categoría con altura fija + scroll interno */
+/* Cada bloque de categoría es una “tarjeta” masonry */
 #contenedorCategorias .categorias {
-  display: flex;
-  flex-direction: column;
-  height: var(--cat-h);
-  width: 100%;
+  display: block;
   background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
   backdrop-filter: blur(6px);
   border: var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  margin: 0 0 20px;
   padding: 14px;
-  overflow: hidden;              /* oculta scrollbars externas */
-  contain: paint;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  -moz-column-break-inside: avoid;
+  overflow: hidden;          /* evita líneas/artefactos */
+  contain: paint;            /* mejora repintado */
+  animation: fadeUp .35s ease both;
 }
 
 .nombre-categoria {
-  position: sticky;              /* visible mientras scrolleas dentro */
-  top: 0;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
   font-weight: 700;
   letter-spacing: .2px;
+  margin-bottom: 10px;
   color: var(--text);
-  z-index: 1;
 }
 
-/* Contenido scrolleable (lista de archivos) */
-#contenedorCategorias .categorias > ul {
-  flex: 1 1 auto;                /* ocupa el resto de la altura */
-  overflow: auto;
-  display: grid;
-  gap: 12px;
-  padding-right: 4px;            /* pequeño espacio para que no tape la barra */
-  animation: fadeUp .25s ease both;
-}
-
-/* Ítem de archivo */
+/* Dentro de cada categoría, la lista de docs en grid simple */
+#contenedorCategorias .categorias > ul { display: grid; gap: 12px; }
 #contenedorCategorias .categorias > ul > li {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;               /* botones extra pueden bajar */
+  flex-wrap: wrap;           /* botones extra pasan abajo */
   gap: 8px;
   background: rgba(17,24,39,0.6);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
   padding: 10px;
+  animation: fadeUp .35s ease both;
 }
 
-/* Botón “Ver” (primero) a la derecha; el resto queda después */
+/* Botón “Ver” (primer botón) alineado a la derecha de la fila superior */
 #contenedorCategorias .categorias > ul > li > button:first-of-type { margin-left: auto; }
+/* Botones extra con separación arriba si saltan a segunda línea */
 #contenedorCategorias .categorias > ul > li > button:not(:first-of-type) { margin-top: 8px; }
 
-/* (Opcional) Si envuelves el nombre en .file-name, aplica ellipsis */
+/* (Opcional) Si envuelves el nombre en .file-name, aplicamos ellipsis */
 .file-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* =============================
+   OTROS CONTENEDORES EN GRID (si los usas)
+   ============================= */
+.grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
 
 /* =============================
    ZONA DE SUBIDA
@@ -209,7 +207,7 @@ li {
 }
 
 /* =============================
-   MODAL (unificado estilo login)
+   MODAL UNIFICADO (look login)
    ============================= */
 .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:999; }
 .modal.show { display:flex; align-items:center; justify-content:center; }
@@ -223,7 +221,26 @@ li {
   box-shadow: var(--shadow);
   position: relative;
 }
-.minimizar { position:absolute; right:12px; top:10px; cursor:pointer; font-weight:700; color:var(--muted); }
+.minimizar {
+  position: absolute; right: 12px; top: 10px;
+  cursor: pointer; font-weight: 700; color: var(--muted);
+}
+
+/* Modal decisión y utilidades */
+.nombre-doc { font-weight: 700; word-break: break-word; }
+.decision-row { display:flex; gap:16px; justify-content:space-between; align-items:center; margin:8px 0 6px; }
+.diff-wrap { margin:8px 0 10px; }
+.diff-label { margin-bottom:6px; color: var(--muted); }
+.diff-bar { height:10px; background:#334155; border-radius:999px; overflow:hidden; }
+.diff-bar-fill { height:100%; background:#2e86de; width:0%; transition:width .25s ease; }
+.diff-hint { font-size:.85rem; color:#94a3b8; margin-top:6px; }
+.decision-msg { margin:10px 0 0; color: var(--text); }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; }
+.modal-actions .secondary { background: rgba(255,255,255,0.08); color: var(--text); }
+.modal-actions .danger { background: var(--danger); color:#fff; }
+.modal-actions .primary { background: var(--accent); color:#fff; }
+.kbd-hints { margin-top:10px; font-size:.9rem; color:#94a3b8; }
+.kbd-hints kbd { background:#0b1220; border:1px solid #1f2937; border-bottom-width:2px; border-radius:4px; padding:1px 5px; color:#e5e7eb; }
 
 /* =============================
    PROGRESO
@@ -237,11 +254,7 @@ li {
    ============================= */
 @media (max-width: 768px) {
   body { padding: 14px; }
-  #contenedorCategorias.grid-container {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  :root { --cat-h: 360px; }      /* tarjetas un poco más bajas en móvil */
+  #contenedorCategorias { column-count: 1; column-gap: 0; }
   section { padding: 16px; }
 }
 
