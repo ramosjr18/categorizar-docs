@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📁 Clasificador de Documentos</title>
+  <link rel="stylesheet" href="/frontend/styles.css">
+  <link rel="apple-touch-icon" sizes="180x180" href="./favicon_io/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="./favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="./favicon_io/site.webmanifest">
+  <style>
+    /* Estilos mínimos para el modal de decisión, si tu CSS no los define */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 16px 20px; border-radius: 10px; width: min(520px, 92vw); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    .modal-actions button { padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; }
+    .modal-actions .secondary { background: #eee; }
+    .modal-actions .danger { background: #e74c3c; color: #fff; }
+    .modal-actions .primary { background: #2e86de; color: #fff; }
+    .nombre-doc { font-weight: 600; }
+  </style>
+</head>
+
+<body>
+  <h1>📁 Clasificador de Documentos</h1>
+  <button id="logoutBtn">Cerrar sesión</button>
+
+  <section id="zonaSubida">
+    <h2>Subir documento</h2>
+    <p>Archivos admitidos: <strong>.pdf, .xlsx, .docx, .csv</strong></p>
+
+    <!-- Opción A: subir ARCHIVOS (múltiples) -->
+    <form id="uploadForm">
+      <input
+        type="file"
+        id="archivo"
+        name="archivo"
+        required
+        multiple
+        accept=".pdf,.xlsx,.docx,.csv"
+      />
+      <button type="submit">Subir archivos</button>
+    </form>
+
+    <!-- Opción B: subir CARPETA (múltiples) -->
+    <form id="uploadFolderForm" style="margin-top: 10px;">
+      <input type="file" id="carpeta" name="carpeta" webkitdirectory multiple />
+      <button type="submit">Subir carpeta</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Lista de documentos</h2>
+    categoría:
+    <select id="filtroCategoria">
+      <option value="todas">Todas</option>
+      <option value="Finanzas">Finanzas</option>
+      <option value="Legal">Legal</option>
+      <option value="Reporte">Reporte</option>
+      <option value="Sistemas y Servidores">Sistemas y Servidores</option>
+      <option value="Inventario">Inventario</option>
+      <option value="General">General</option>
+      <option value="Politicas y Controles">Politicas y Controles</option>
+    </select>
+    <button id="aplicarFiltro">Filtrar</button>
+
+    <input type="text" id="buscadorDocumentos" placeholder="Buscar por nombre..." style="margin-left: 10px;">
+  </section>
+
+  <!-- Contenedor para mensajes -->
+  <div id="mensaje" class="mensaje"></div>
+
+  <!-- Contenedor dinámico para categorías -->
+  <div id="contenedorCategorias" class="grid-container"></div>
+
+  <!-- Modal de progreso (tu modal existente) -->
+  <div id="modalProgreso" class="modal">
+    <div class="modal-content">
+      <span class="minimizar" onclick="toggleModal()">━</span>
+      <h3>📤 Subiendo archivos...</h3>
+      <div id="progresoArchivos"></div>
+    </div>
+  </div>
+
+ <!-- Modal de DECISIÓN para conflictos (409) -->
+<div id="modalDecision" class="modal" aria-hidden="true">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="decisionTitle">
+    <h3 id="decisionTitle">Contenido actualizado detectado</h3>
+
+    <div class="decision-row">
+      <div>Documento: <span id="decisionNombre" class="nombre-doc"></span></div>
+      <div>Versión actual: <strong>v<span id="decisionVersion">?</span></strong></div>
+    </div>
+
+    <div class="diff-wrap">
+      <div class="diff-label">Cambio estimado: <strong id="decisionDiffText">—</strong></div>
+      <div class="diff-bar">
+        <div id="decisionDiffBar" class="diff-bar-fill" style="width:0%"></div>
+      </div>
+      <div class="diff-hint">Umbral de igualdad: ≤ 1%.</div>
+    </div>
+
+    <p id="decisionMensaje" class="decision-msg"></p>
+
+    <div class="modal-actions">
+      <button id="btnOmitir" class="secondary" title="Esc">Omitir</button>
+      <button id="btnReplace" class="danger" title="R">Reemplazar</button>
+      <button id="btnNewVersion" class="primary" title="Enter / N">Nueva versión</button>
+    </div>
+
+    <div class="kbd-hints">
+      Atajos: <kbd>R</kbd> Reemplazar &nbsp;•&nbsp; <kbd>N</kbd> Nueva versión &nbsp;•&nbsp; <kbd>Esc</kbd> Omitir
+    </div>
+  </div>
+</div>
+
+
+  <script src="/frontend/main.js"></script>
+
+  <script>
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/logout', {
+          method: 'POST',
+          credentials: 'include'
+        });
+        if (res.ok) {
+          alert('Sesión cerrada');
+          window.location.href = '/login.html';
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Error al cerrar sesión');
+        }
+      } catch (error) {
+        alert('Error de red');
+        console.error(error);
+      }
+    });
+  </script>
+</body>
+</html>

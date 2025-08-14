@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, session
-from werkzeug.security import generate_password_hash, check_password_hash
-from .models import db, Usuario
 from functools import wraps
 from email_validator import validate_email, EmailNotValidError
+
+from .models import db, Usuario
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -15,7 +15,7 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            return jsonify({'error': 'No autorizado'}), 401
+            return jsonify({'error': 'No autorizado', 'error_code': 'UNAUTHORIZED'}), 401
         return f(*args, **kwargs)
     return decorated_function
 
@@ -24,12 +24,14 @@ def json_required(*fields):
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            data = request.get_json()
+            data = request.get_json(silent=True)
             if not data:
-                return jsonify({'error': 'JSON requerido'}), 400
+                return jsonify({'error': 'JSON requerido', 'error_code': 'JSON_REQUIRED'}), 400
             for field in fields:
                 if field not in data:
-                    return jsonify({'error': f'Campo "{field}" es requerido'}), 400
+                    return jsonify({'error': f'Campo "{field}" es requerido',
+                                    'error_code': 'MISSING_FIELD',
+                                    'field': field}), 400
             return f(*args, **kwargs)
         return wrapper
     return decorator
@@ -38,12 +40,22 @@ def json_required(*fields):
 # Rutas de autenticación
 # ---------------------------
 
+@auth_bp.route('/api/registration-status', methods=['GET'])
+def registration_status():
+    """
+    Devuelve si el registro público está abierto.
+    Está abierto solo si no existe ningún usuario en el sistema (primer arranque).
+    """
+    abierto = (Usuario.query.first() is None)
+    return jsonify({'open': abierto}), 200
+
+
 @auth_bp.route('/api/register', methods=['POST'])
 @json_required('email', 'password')
 def register():
     """
     Registra el primer usuario como admin.
-    Después de eso, bloquea el registro público.
+    Después de eso, bloquea el registro público (solo admin puede crear usuarios).
     """
     data = request.get_json()
 
@@ -52,17 +64,28 @@ def register():
         valid = validate_email(data['email'])
         email = valid.email
     except EmailNotValidError as e:
-        return jsonify({'error': str(e)}), 400
+        return jsonify({
+            'error': str(e),
+            'error_code': 'INVALID_EMAIL'
+        }), 400
 
+    # Usuario ya existe
     if Usuario.query.filter_by(email=email).first():
-        return jsonify({'error': 'Usuario ya existe'}), 400
+        return jsonify({
+            'error': 'Usuario ya existe',
+            'error_code': 'USER_EXISTS'
+        }), 400
 
-    # Verificar si ya existe al menos un usuario en el sistema
+    # ¿Ya hay usuarios? Si sí, registro público deshabilitado
     ya_hay_usuarios = Usuario.query.first() is not None
     if ya_hay_usuarios:
-        return jsonify({'error': 'Registro deshabilitado. Solo el admin puede crear usuarios.'}), 403
+        return jsonify({
+            'error': 'Registro deshabilitado. Solo un administrador puede crear nuevos usuarios.',
+            'error_code': 'REGISTRATION_DISABLED'
+        }), 403
 
-    nuevo_usuario = Usuario(email=email, is_admin=True)  # El primer usuario es admin
+    # Crear primer usuario como admin
+    nuevo_usuario = Usuario(email=email, is_admin=True)
     nuevo_usuario.set_password(data['password'])
 
     try:
@@ -70,7 +93,10 @@ def register():
         db.session.commit()
     except Exception:
         db.session.rollback()
-        return jsonify({'error': 'Error al registrar usuario'}), 500
+        return jsonify({
+            'error': 'Error al registrar usuario',
+            'error_code': 'DB_ERROR'
+        }), 500
 
     return jsonify({'message': 'Administrador creado correctamente'}), 201
 
@@ -79,6 +105,11 @@ def register():
 @login_required
 def yo():
     user = Usuario.query.get(session.get('user_id'))
+    if not user:
+        # Sesión inválida (usuario borrado)
+        session.clear()
+        return jsonify({'error': 'Sesión inválida', 'error_code': 'INVALID_SESSION'}), 401
+
     return jsonify({
         'email': user.email,
         'is_admin': getattr(user, 'is_admin', False)
@@ -96,17 +127,23 @@ def crear_usuario():
     admin = Usuario.query.get(admin_id)
 
     if not admin or not admin.is_admin:
-        return jsonify({'error': 'Solo el administrador puede crear usuarios'}), 403
+        return jsonify({
+            'error': 'Solo el administrador puede crear usuarios',
+            'error_code': 'ONLY_ADMIN'
+        }), 403
 
     data = request.get_json()
+
+    # Validar email
     try:
         valid = validate_email(data['email'])
         email = valid.email
     except EmailNotValidError as e:
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(e), 'error_code': 'INVALID_EMAIL'}), 400
 
+    # Ya existe
     if Usuario.query.filter_by(email=email).first():
-        return jsonify({'error': 'Este email ya está registrado'}), 400
+        return jsonify({'error': 'Este email ya está registrado', 'error_code': 'USER_EXISTS'}), 400
 
     nuevo_usuario = Usuario(email=email)
     nuevo_usuario.set_password(data['password'])
@@ -116,7 +153,7 @@ def crear_usuario():
         db.session.commit()
     except Exception:
         db.session.rollback()
-        return jsonify({'error': 'Error al crear usuario'}), 500
+        return jsonify({'error': 'Error al crear usuario', 'error_code': 'DB_ERROR'}), 500
 
     return jsonify({'message': 'Usuario creado correctamente'}), 201
 
@@ -136,7 +173,7 @@ def login():
         session['user_id'] = usuario.id
         return jsonify({'message': 'Login exitoso'}), 200
 
-    return jsonify({'error': 'Credenciales inválidas'}), 401
+    return jsonify({'error': 'Credenciales inválidas', 'error_code': 'INVALID_CREDENTIALS'}), 401
 
 
 @auth_bp.route('/api/logout', methods=['POST'])

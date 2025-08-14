@@ -7,7 +7,7 @@ from io import BytesIO
 from difflib import SequenceMatcher
 import mimetypes
 
-from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, current_app, send_file
+from flask import request, jsonify, send_from_directory, render_template, session, redirect, abort, send_file
 from werkzeug.utils import secure_filename
 
 from . import app, db
@@ -20,8 +20,15 @@ from .auth_routes import login_required
 from .utils.utils_fs import ensure_dir
 from .utils.utils_uploads import ensure_allowed_and_name, save_bytes
 
+# ==== RUTAS ABSOLUTAS AL FRONTEND (robusto a la estructura del repo) ====
+REPO_ROOT = Path(__file__).resolve().parents[2]   # .../<repo>
+FRONTEND_DIR = REPO_ROOT / "frontend"             # .../<repo>/frontend
+
+def _frontend_dir() -> str:
+    return str(FRONTEND_DIR)
 
 
+# ==== UTIL: RESOLUCIÓN DE RUTA FÍSICA DE DOCUMENTOS ====
 def ruta_fisica_de_documento(doc) -> Path:
     base = Path(UPLOAD_DIR)
     grupo_dir = secure_filename(Path(doc.grupo).stem) or "doc"
@@ -32,70 +39,82 @@ def ruta_fisica_de_documento(doc) -> Path:
     legado = base / doc.nombre
     return legado
 
+
+# ==== MANEJO 404 (sirve 404.html del frontend si existe) ====
 @app.errorhandler(404)
 def not_found(e):
     try:
-        return send_from_directory('frontend', '404.html'), 404
+        return send_from_directory(_frontend_dir(), '404.html'), 404
     except Exception:
         # Fallback por si falta el archivo
         return ("<h1>404</h1><p>Página no encontrada</p>", 404)
 
 @app.route("/404")
 def show_404():
-    return send_from_directory('frontend', '404.html'), 404
+    return send_from_directory(_frontend_dir(), '404.html'), 404
 
 
-# --- PROTECCIÓN GLOBAL DE RUTAS ---
+# ==== PROTECCIÓN GLOBAL DE RUTAS ====
 @app.before_request
 def proteger_todas_rutas():
     rutas_publicas = [
         '/api/login',
         '/api/register',
+        '/api/registration-status',
         '/login.html',
         '/register.html',
         '/',
         '/favicon.ico',
-        '/404',          
+        '/404',
         '/404.html',
     ]
     if any(request.path.startswith(r) for r in rutas_publicas):
         return
+    # Deja pasar assets estáticos del frontend/ y /static/
     if request.path.startswith('/static/') or request.path.startswith('/frontend/'):
         return
     if 'user_id' not in session:
         return jsonify({'error': 'No autorizado'}), 401
 
 
+# Carpeta de uploads
 UPLOAD_DIR = ensure_dir(Path(app.config.get('UPLOAD_FOLDER', 'uploads')))
 
-# --- PÁGINAS PRINCIPALES ---
-@app.route('/')
-def home():
-    return redirect('/index.html') if 'user_id' in session else send_from_directory('frontend', 'login.html')
 
-@app.route('/index.html')
-def index_page():
-    return send_from_directory('frontend', 'index.html') if 'user_id' in session else redirect('/')
+# ==== SERVIR ASSETS DEL FRONTEND (CSS/JS/IMÁGENES) ====
+@app.route('/frontend/<path:filename>')
+def serve_frontend_assets(filename):
+    # Responde: http://localhost:5000/frontend/styles.css, /frontend/main.js, etc.
+    return send_from_directory(_frontend_dir(), filename)
+
+
+# ==== PÁGINAS PRINCIPALES (LANDING, LOGIN, REGISTER, DASHBOARD) ====
+@app.route('/')
+def landing():
+    # Landing público
+    return send_from_directory(_frontend_dir(), 'index.html')
 
 @app.route('/login.html')
 def login_page():
-    return redirect('/index.html') if 'user_id' in session else send_from_directory('frontend', 'login.html')
+    if 'user_id' in session:
+        return redirect('/dashboard')
+    return send_from_directory(_frontend_dir(), 'login.html')
 
 @app.route('/register.html')
 def register_page():
-    return redirect('/index.html') if 'user_id' in session else send_from_directory('frontend', 'register.html')
+    if 'user_id' in session:
+        return redirect('/dashboard')
+    return send_from_directory(_frontend_dir(), 'register.html')
 
-@app.route('/admin')
-@login_required
-def admin_panel():
-    usuario = Usuario.query.get(session.get('user_id'))
-    if not usuario or not usuario.is_admin:
-        return "No autorizado", 403
-    return render_template('admin.html')
+@app.route('/dashboard')
+def dashboard_page():
+    # Protegido por sesión
+    if 'user_id' not in session:
+        return redirect('/login.html')
+    return send_from_directory(_frontend_dir(), 'dashboard.html')
 
 
-# --- SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ---
-
+# ==== SUBIDA Y PROCESAMIENTO DE DOCUMENTOS ====
 @app.route("/upload", methods=["POST"])
 @login_required
 def subir_documento():
@@ -278,13 +297,12 @@ def subir_documento():
         return jsonify(resultados)
 
     except Exception as e:
-        import traceback
         traceback.print_exc()
         app.logger.error(f"Error interno en subir_documento: {e}")
         return jsonify({"error": "Error interno"}), 500
 
 
-# --- DOCUMENTOS ---
+# ==== DOCUMENTOS ====
 @app.route("/documentos", methods=["GET"])
 @login_required
 def obtener_documentos():
@@ -364,7 +382,8 @@ def ver_docx():
     nombre = request.args.get("nombre")
     return render_template("ver_docx.html", nombre=nombre)
 
-# --- GRAFICAR DATOS ---
+
+# ==== GRAFICAR DATOS ====
 @app.route("/graficos")
 @login_required
 def graficar_datos():
@@ -397,12 +416,14 @@ def graficar_datos():
     return render_template("graficos.html", datos=datos_para_graficar)
 
 
-
 @app.route("/api/hojas/<int:id_archivo>")
 @login_required
 def obtener_hojas_o_columnas(id_archivo):
     doc = Documento.query.get_or_404(id_archivo)
-    ruta = str(UPLOAD_DIR / doc.nombre)
+    path = ruta_fisica_de_documento(doc)
+    if not path.exists():
+        return jsonify({"error": "Archivo no encontrado"}), 404
+    ruta = str(path)
 
     try:
         if doc.tipo == "xlsx":
